@@ -256,5 +256,5 @@ offset_top = 6.0
 offset_right = 472.0
 offset_bottom = 24.0
 theme_override_font_sizes/font_size = 12
-text = "A salta · B dash · R reinicia · M1-M3 para reportar"
+text = "A salta (x2 doble) · B dash · R reinicia · reportar por M1-M5"
 horizontal_alignment = 1

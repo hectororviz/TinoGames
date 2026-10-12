@@ -13,6 +13,7 @@ extends CharacterBody2D
 @export var gravity: float = 700.0
 @export var coyote_time: float = 0.10
 @export var jump_buffer: float = 0.12
+@export var double_jump: bool = true
 
 @export_group("Dash")
 @export var dash_speed: float = 260.0
@@ -26,6 +27,7 @@ var facing: int = 1
 var start_position: Vector2
 var _coyote: float = 0.0
 var _buffer: float = 0.0
+var _dj_used: bool = false
 var _dash_t: float = 0.0
 var _dash_cd: float = 0.0
 
@@ -77,6 +79,7 @@ func _physics_process(delta: float) -> void:
 			_coyote -= delta
 		else:
 			_coyote = coyote_time
+			_dj_used = false
 
 	if Input.is_action_just_pressed("jump"):
 		_buffer = jump_buffer
@@ -86,6 +89,11 @@ func _physics_process(delta: float) -> void:
 		velocity.y = jump_velocity
 		_buffer = 0.0
 		_coyote = 0.0
+		_dash_t = 0.0
+	elif _buffer > 0.0 and double_jump and not _dj_used and not is_on_floor():
+		velocity.y = jump_velocity * 0.9
+		_buffer = 0.0
+		_dj_used = true
 		_dash_t = 0.0
 
 	move_and_slide()
