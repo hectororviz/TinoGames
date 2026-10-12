@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/touch_controls.gd" id="2_touch"]
@@ -6,6 +6,10 @@
 [ext_resource type="PackedScene" path="res://scenes/milestone.tscn" id="4_mile"]
 [ext_resource type="Texture2D" path="res://art/bg_sky.png" id="5_sky"]
 [ext_resource type="Texture2D" path="res://art/bg_hills.png" id="6_hills"]
+[ext_resource type="Script" path="res://scripts/hud.gd" id="7_hud"]
+[ext_resource type="PackedScene" path="res://scenes/collectible.tscn" id="8_gem"]
+[ext_resource type="Texture2D" path="res://art/Apple.png" id="9_apple"]
+[ext_resource type="Texture2D" path="res://art/Strawberry.png" id="10_straw"]
 
 [sub_resource type="RectangleShape2D" id="Rect_F1"]
 size = Vector2(320, 32)
@@ -16,8 +20,17 @@ size = Vector2(416, 32)
 [sub_resource type="RectangleShape2D" id="Rect_P"]
 size = Vector2(64, 12)
 
+[sub_resource type="RectangleShape2D" id="Rect_HF"]
+size = Vector2(128, 32)
+
+[sub_resource type="RectangleShape2D" id="Rect_F4"]
+size = Vector2(160, 32)
+
+[sub_resource type="RectangleShape2D" id="Rect_Exit"]
+size = Vector2(32, 48)
+
 [sub_resource type="RectangleShape2D" id="Rect_Kill"]
-size = Vector2(900, 120)
+size = Vector2(1300, 120)
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
@@ -62,6 +75,22 @@ shape = SubResource("Rect_P")
 position = Vector2(100, -90)
 shape = SubResource("Rect_P")
 
+[node name="P3" type="CollisionShape2D" parent="Geometry"]
+position = Vector2(190, -130)
+shape = SubResource("Rect_P")
+
+[node name="P4" type="CollisionShape2D" parent="Geometry"]
+position = Vector2(290, -160)
+shape = SubResource("Rect_P")
+
+[node name="HF" type="CollisionShape2D" parent="Geometry"]
+position = Vector2(364, -144)
+shape = SubResource("Rect_HF")
+
+[node name="F4" type="CollisionShape2D" parent="Geometry"]
+position = Vector2(540, 16)
+shape = SubResource("Rect_F4")
+
 [node name="Visuals" type="Node2D" parent="."]
 
 [node name="Killzone" type="Area2D" parent="."]
@@ -69,6 +98,44 @@ position = Vector2(0, 190)
 
 [node name="Shape" type="CollisionShape2D" parent="Killzone"]
 shape = SubResource("Rect_Kill")
+
+[node name="Exit" type="Area2D" parent="."]
+position = Vector2(605, -24)
+
+[node name="Shape" type="CollisionShape2D" parent="Exit"]
+shape = SubResource("Rect_Exit")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+layer = 5
+script = ExtResource("7_hud")
+
+[node name="FruitLabel" type="Label" parent="HUD"]
+unique_name_in_owner = true
+offset_left = 12.0
+offset_top = 8.0
+offset_right = 200.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(0.2, 0.25, 0.2, 1)
+theme_override_font_sizes/font_size = 16
+text = "Frutas: 0/6"
+
+[node name="MsgLabel" type="Label" parent="HUD"]
+unique_name_in_owner = true
+visible = false
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -200.0
+offset_top = 34.0
+offset_right = 200.0
+offset_bottom = 56.0
+theme_override_colors/font_color = Color(0.2, 0.25, 0.2, 1)
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 1
+
+[node name="MsgTimer" type="Timer" parent="HUD"]
+unique_name_in_owner = true
+wait_time = 2.5
+one_shot = true
 
 [node name="Player" parent="." instance=ExtResource("3_player")]
 position = Vector2(-320, -10)
@@ -90,6 +157,42 @@ position = Vector2(340, 0)
 
 [node name="Tag" parent="M3"]
 text = "M3"
+
+[node name="M4" parent="." instance=ExtResource("4_mile")]
+position = Vector2(310, -160)
+
+[node name="Tag" parent="M4"]
+text = "M4"
+
+[node name="M5" parent="." instance=ExtResource("4_mile")]
+position = Vector2(560, 0)
+
+[node name="Tag" parent="M5"]
+text = "M5"
+
+[node name="F1" parent="." instance=ExtResource("8_gem")]
+position = Vector2(-300, -48)
+sprite = ExtResource("9_apple")
+
+[node name="F2" parent="." instance=ExtResource("8_gem")]
+position = Vector2(-200, -88)
+sprite = ExtResource("10_straw")
+
+[node name="F3" parent="." instance=ExtResource("8_gem")]
+position = Vector2(100, -118)
+sprite = ExtResource("9_apple")
+
+[node name="F4" parent="." instance=ExtResource("8_gem")]
+position = Vector2(290, -188)
+sprite = ExtResource("10_straw")
+
+[node name="F5" parent="." instance=ExtResource("8_gem")]
+position = Vector2(364, -188)
+sprite = ExtResource("9_apple")
+
+[node name="F6" parent="." instance=ExtResource("8_gem")]
+position = Vector2(540, -28)
+sprite = ExtResource("10_straw")
 
 [node name="TouchControls" type="CanvasLayer" parent="."]
 layer = 10

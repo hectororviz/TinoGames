@@ -1,5 +1,5 @@
 extends Node2D
-## Pantalla de juego: pinta tiles PA sobre la colisión, cámara, foso y R.
+## Pantalla de juego: pinta tiles PA sobre la colisión, cámara, foso, meta y R.
 
 
 const TILESET_TEX: Texture2D = preload("res://art/tiles_pa.png")
@@ -57,10 +57,19 @@ func _ready() -> void:
 	var cam := get_tree().get_first_node_in_group("player_camera") as Camera2D
 	if cam != null:
 		cam.limit_left = -440
-		cam.limit_top = -200
-		cam.limit_right = 440
+		cam.limit_top = -220
+		cam.limit_right = 660
 		cam.limit_bottom = 120
 	($Killzone as Area2D).body_entered.connect(_on_killzone_body)
+	($Exit as Area2D).body_entered.connect(_on_exit_body)
+
+
+func _on_exit_body(body: Node2D) -> void:
+	if not body.has_method("respawn"):
+		return
+	var hud := get_tree().get_first_node_in_group("hud")
+	if hud != null and hud.has_method("show_msg"):
+		hud.show_msg("¡META! ¿Otra vuelta? Pulsa R")
 
 
 func _on_killzone_body(body: Node2D) -> void:

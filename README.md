@@ -22,7 +22,8 @@ Salida: `../builds/jueguito-debug.apk` (ignorado en git).
 - `scenes/main.tscn` — pantalla: suelo, 2 plataformas, foso, M1–M3, táctil.
 - `scenes/player.tscn` — héroe (correr/saltar/dash, coyote + buffer).
 - `scripts/` — un script por escena, sin autoloads todavía.
-- `art/` — todo generado por `tools/gen_art.py`. Nada de binarios sin fuente.
+- `art/` — kid reemplazado por Pink Man (`pink.png`); terreno, manzanas y
+  frutillas de Pixel Adventure (ver `art/CREDITS_PIXELADVENTURE.md`).
 - `docs/MAPA.txt` — el nivel en texto, para diseñar hablando.
 - `docs/LECCIONES.md` — lo aprendido en el proyecto anterior.
 

@@ -95,10 +95,14 @@ func _physics_process(delta: float) -> void:
 func _update_anim() -> void:
 	_spr.flip_h = facing < 0
 	if not is_on_floor():
+		_spr.position.y = -16.0
 		_spr.play("jump" if velocity.y < 0.0 else "fall")
 	elif absf(velocity.x) > 10.0:
+		# Los frames de correr vienen 4px más altos: se compensa acá.
+		_spr.position.y = -12.0
 		_spr.play("run")
 	else:
+		_spr.position.y = -16.0
 		_spr.play("idle")
 
 
