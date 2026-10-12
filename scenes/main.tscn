@@ -64,38 +64,6 @@ shape = SubResource("Rect_P")
 
 [node name="Visuals" type="Node2D" parent="."]
 
-[node name="Dirt1" type="Polygon2D" parent="Visuals"]
-color = Color(0.55, 0.38, 0.24, 1)
-polygon = PackedVector2Array(-400, 0, -80, 0, -80, 32, -400, 32)
-
-[node name="Grass1" type="Polygon2D" parent="Visuals"]
-color = Color(0.35, 0.65, 0.35, 1)
-polygon = PackedVector2Array(-400, -5, -80, -5, -80, 0, -400, 0)
-
-[node name="Dirt2" type="Polygon2D" parent="Visuals"]
-color = Color(0.55, 0.38, 0.24, 1)
-polygon = PackedVector2Array(-16, 0, 400, 0, 400, 32, -16, 32)
-
-[node name="Grass2" type="Polygon2D" parent="Visuals"]
-color = Color(0.35, 0.65, 0.35, 1)
-polygon = PackedVector2Array(-16, -5, 400, -5, 400, 0, -16, 0)
-
-[node name="Slab1" type="Polygon2D" parent="Visuals"]
-color = Color(0.6, 0.45, 0.3, 1)
-polygon = PackedVector2Array(-232, -66, -168, -66, -168, -54, -232, -54)
-
-[node name="Slab1Top" type="Polygon2D" parent="Visuals"]
-color = Color(0.35, 0.65, 0.35, 1)
-polygon = PackedVector2Array(-232, -66, -168, -66, -168, -62, -232, -62)
-
-[node name="Slab2" type="Polygon2D" parent="Visuals"]
-color = Color(0.6, 0.45, 0.3, 1)
-polygon = PackedVector2Array(68, -96, 132, -96, 132, -84, 68, -84)
-
-[node name="Slab2Top" type="Polygon2D" parent="Visuals"]
-color = Color(0.35, 0.65, 0.35, 1)
-polygon = PackedVector2Array(68, -96, 132, -96, 132, -92, 68, -92)
-
 [node name="Killzone" type="Area2D" parent="."]
 position = Vector2(0, 190)
 

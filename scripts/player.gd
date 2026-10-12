@@ -19,8 +19,8 @@ extends CharacterBody2D
 @export var dash_time: float = 0.12
 @export var dash_cooldown: float = 0.8
 
-const SHEET: Texture2D = preload("res://art/kid.png")
-const CELL: int = 48
+const SHEET: Texture2D = preload("res://art/pink.png")
+const CELL: int = 32
 
 var facing: int = 1
 var start_position: Vector2

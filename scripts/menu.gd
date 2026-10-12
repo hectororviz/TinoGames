@@ -12,10 +12,10 @@ func _ready() -> void:
 	(%PlayBtn as Button).grab_focus()
 	(%PlayBtn as Button).pressed.connect(_on_play)
 	(%QuitBtn as Button).pressed.connect(_on_quit)
-	var sheet := load("res://art/kid.png") as Texture2D
+	var sheet := load("res://art/pink.png") as Texture2D
 	var atlas := AtlasTexture.new()
 	atlas.atlas = sheet
-	atlas.region = Rect2(0, 0, 48, 48)
+	atlas.region = Rect2(0, 0, 32, 32)
 	_hero.texture = atlas
 
 
