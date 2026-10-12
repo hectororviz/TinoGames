@@ -1,0 +1,189 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/touch_controls.gd" id="2_touch"]
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://scenes/milestone.tscn" id="4_mile"]
+[ext_resource type="Texture2D" path="res://art/bg_sky.png" id="5_sky"]
+[ext_resource type="Texture2D" path="res://art/bg_hills.png" id="6_hills"]
+
+[sub_resource type="RectangleShape2D" id="Rect_F1"]
+size = Vector2(320, 32)
+
+[sub_resource type="RectangleShape2D" id="Rect_F2"]
+size = Vector2(416, 32)
+
+[sub_resource type="RectangleShape2D" id="Rect_P"]
+size = Vector2(64, 12)
+
+[sub_resource type="RectangleShape2D" id="Rect_Kill"]
+size = Vector2(900, 120)
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="Sky" type="CanvasLayer" parent="."]
+layer = -2
+
+[node name="SkyTex" type="TextureRect" parent="Sky"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_right = 0.0
+offset_bottom = 0.0
+texture = ExtResource("5_sky")
+expand_mode = 1
+stretch_mode = 0
+
+[node name="Hills" type="ParallaxBackground" parent="."]
+
+[node name="Layer" type="ParallaxLayer" parent="Hills"]
+motion_scale = Vector2(0.3, 0.2)
+motion_mirroring = Vector2(480, 270)
+
+[node name="HillsTex" type="Sprite2D" parent="Hills/Layer"]
+position = Vector2(240, 210)
+texture = ExtResource("6_hills")
+
+[node name="Geometry" type="StaticBody2D" parent="."]
+
+[node name="F1" type="CollisionShape2D" parent="Geometry"]
+position = Vector2(-240, 16)
+shape = SubResource("Rect_F1")
+
+[node name="F2" type="CollisionShape2D" parent="Geometry"]
+position = Vector2(192, 16)
+shape = SubResource("Rect_F2")
+
+[node name="P1" type="CollisionShape2D" parent="Geometry"]
+position = Vector2(-200, -60)
+shape = SubResource("Rect_P")
+
+[node name="P2" type="CollisionShape2D" parent="Geometry"]
+position = Vector2(100, -90)
+shape = SubResource("Rect_P")
+
+[node name="Visuals" type="Node2D" parent="."]
+
+[node name="Dirt1" type="Polygon2D" parent="Visuals"]
+color = Color(0.55, 0.38, 0.24, 1)
+polygon = PackedVector2Array(-400, 0, -80, 0, -80, 32, -400, 32)
+
+[node name="Grass1" type="Polygon2D" parent="Visuals"]
+color = Color(0.35, 0.65, 0.35, 1)
+polygon = PackedVector2Array(-400, -5, -80, -5, -80, 0, -400, 0)
+
+[node name="Dirt2" type="Polygon2D" parent="Visuals"]
+color = Color(0.55, 0.38, 0.24, 1)
+polygon = PackedVector2Array(-16, 0, 400, 0, 400, 32, -16, 32)
+
+[node name="Grass2" type="Polygon2D" parent="Visuals"]
+color = Color(0.35, 0.65, 0.35, 1)
+polygon = PackedVector2Array(-16, -5, 400, -5, 400, 0, -16, 0)
+
+[node name="Slab1" type="Polygon2D" parent="Visuals"]
+color = Color(0.6, 0.45, 0.3, 1)
+polygon = PackedVector2Array(-232, -66, -168, -66, -168, -54, -232, -54)
+
+[node name="Slab1Top" type="Polygon2D" parent="Visuals"]
+color = Color(0.35, 0.65, 0.35, 1)
+polygon = PackedVector2Array(-232, -66, -168, -66, -168, -62, -232, -62)
+
+[node name="Slab2" type="Polygon2D" parent="Visuals"]
+color = Color(0.6, 0.45, 0.3, 1)
+polygon = PackedVector2Array(68, -96, 132, -96, 132, -84, 68, -84)
+
+[node name="Slab2Top" type="Polygon2D" parent="Visuals"]
+color = Color(0.35, 0.65, 0.35, 1)
+polygon = PackedVector2Array(68, -96, 132, -96, 132, -92, 68, -92)
+
+[node name="Killzone" type="Area2D" parent="."]
+position = Vector2(0, 190)
+
+[node name="Shape" type="CollisionShape2D" parent="Killzone"]
+shape = SubResource("Rect_Kill")
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+position = Vector2(-320, -10)
+
+[node name="M1" parent="." instance=ExtResource("4_mile")]
+position = Vector2(-320, 0)
+
+[node name="Tag" parent="M1"]
+text = "M1"
+
+[node name="M2" parent="." instance=ExtResource("4_mile")]
+position = Vector2(-48, 0)
+
+[node name="Tag" parent="M2"]
+text = "M2"
+
+[node name="M3" parent="." instance=ExtResource("4_mile")]
+position = Vector2(340, 0)
+
+[node name="Tag" parent="M3"]
+text = "M3"
+
+[node name="TouchControls" type="CanvasLayer" parent="."]
+layer = 10
+script = ExtResource("2_touch")
+
+[node name="MoveLeft" type="Button" parent="TouchControls"]
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -84.0
+offset_right = 84.0
+offset_bottom = -16.0
+focus_mode = 0
+modulate = Color(1, 1, 1, 0.65)
+theme_override_font_sizes/font_size = 24
+text = "◀"
+
+[node name="MoveRight" type="Button" parent="TouchControls"]
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 92.0
+offset_top = -84.0
+offset_right = 160.0
+offset_bottom = -16.0
+focus_mode = 0
+modulate = Color(1, 1, 1, 0.65)
+theme_override_font_sizes/font_size = 24
+text = "▶"
+
+[node name="Jump" type="Button" parent="TouchControls"]
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -84.0
+offset_top = -84.0
+offset_right = -16.0
+offset_bottom = -16.0
+focus_mode = 0
+modulate = Color(1, 1, 1, 0.65)
+theme_override_font_sizes/font_size = 24
+text = "A"
+
+[node name="Dash" type="Button" parent="TouchControls"]
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -168.0
+offset_top = -84.0
+offset_right = -100.0
+offset_bottom = -16.0
+focus_mode = 0
+modulate = Color(1, 1, 1, 0.65)
+theme_override_font_sizes/font_size = 24
+text = "B"
+
+[node name="Hint" type="Label" parent="."]
+offset_left = 8.0
+offset_top = 6.0
+offset_right = 472.0
+offset_bottom = 24.0
+theme_override_font_sizes/font_size = 12
+text = "A salta · B dash · R reinicia · M1-M3 para reportar"
+horizontal_alignment = 1

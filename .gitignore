@@ -1,0 +1,17 @@
+# Godot 4
+.godot/
+*.godot.tmp
+
+# Export locales
+*.keystore
+*.jks
+android/build/
+android/.gradle/
+
+# Salidas de export (binarios locales, no versionar)
+builds/
+
+# Sistema
+.DS_Store
+Thumbs.db
+*~
