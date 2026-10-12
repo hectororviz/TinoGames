@@ -7,9 +7,10 @@ Plataformas 2D cartoon para Android. Godot 4.7. Estado: vertical slice
 
 1. Godot 4.7 → Importar → `jueguito/project.godot`.
 2. F5 → menú → JUGAR (o Enter).
-3. PC: **A/D o flechas** moverse, **Espacio** saltar, **J** dash, **R** reiniciar.
-4. Táctil: ◀ ▶ + A (salta) + B (dash). Funciona con ratón.
-5. Hitos M1–M3 para reportar rarezas ("en M2 el foso es imposible").
+3. PC: **A/D o flechas** moverse, **Espacio** saltar (doble), **J** dash, **R** reiniciar.
+4. Táctil: ◀ ▶ + A (salta) + B (dash). El chancho sale 3s después: ¡corré!
+5. Hitos M1/M2/M3/M5 para reportar ("en M3 los escalones...").
+6. 6 frutas, 2 tiras de pinchos, 3 corazones, meta al este.
 
 ## Exportar a Android
 

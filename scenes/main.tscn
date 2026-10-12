@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=25 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/touch_controls.gd" id="2_touch"]
@@ -10,6 +10,10 @@
 [ext_resource type="PackedScene" path="res://scenes/collectible.tscn" id="8_gem"]
 [ext_resource type="Texture2D" path="res://art/Apple.png" id="9_apple"]
 [ext_resource type="Texture2D" path="res://art/Strawberry.png" id="10_straw"]
+[ext_resource type="PackedScene" path="res://scenes/chaser.tscn" id="11_chase"]
+[ext_resource type="Texture2D" path="res://art/spk48.png" id="12_spk48"]
+[ext_resource type="Texture2D" path="res://art/spk64.png" id="13_spk64"]
+[ext_resource type="Texture2D" path="res://art/heart.png" id="14_heart"]
 
 [sub_resource type="RectangleShape2D" id="Rect_F1"]
 size = Vector2(320, 32)
@@ -20,8 +24,17 @@ size = Vector2(416, 32)
 [sub_resource type="RectangleShape2D" id="Rect_P"]
 size = Vector2(64, 12)
 
-[sub_resource type="RectangleShape2D" id="Rect_HF"]
-size = Vector2(128, 32)
+[sub_resource type="RectangleShape2D" id="Rect_S1"]
+size = Vector2(48, 32)
+
+[sub_resource type="RectangleShape2D" id="Rect_S2"]
+size = Vector2(48, 64)
+
+[sub_resource type="RectangleShape2D" id="Rect_Sp1"]
+size = Vector2(48, 16)
+
+[sub_resource type="RectangleShape2D" id="Rect_Sp2"]
+size = Vector2(64, 16)
 
 [sub_resource type="RectangleShape2D" id="Rect_F4"]
 size = Vector2(160, 32)
@@ -71,27 +84,27 @@ shape = SubResource("Rect_F2")
 position = Vector2(-200, -60)
 shape = SubResource("Rect_P")
 
-[node name="P2" type="CollisionShape2D" parent="Geometry"]
-position = Vector2(100, -90)
-shape = SubResource("Rect_P")
+[node name="S1" type="CollisionShape2D" parent="Geometry"]
+position = Vector2(220, -16)
+shape = SubResource("Rect_S1")
 
-[node name="P3" type="CollisionShape2D" parent="Geometry"]
-position = Vector2(190, -130)
-shape = SubResource("Rect_P")
-
-[node name="P4" type="CollisionShape2D" parent="Geometry"]
-position = Vector2(290, -160)
-shape = SubResource("Rect_P")
-
-[node name="HF" type="CollisionShape2D" parent="Geometry"]
-position = Vector2(364, -144)
-shape = SubResource("Rect_HF")
+[node name="S2" type="CollisionShape2D" parent="Geometry"]
+position = Vector2(280, -32)
+shape = SubResource("Rect_S2")
 
 [node name="F4" type="CollisionShape2D" parent="Geometry"]
 position = Vector2(540, 16)
 shape = SubResource("Rect_F4")
 
 [node name="Visuals" type="Node2D" parent="."]
+
+[node name="Spikes1" type="Sprite2D" parent="Visuals"]
+position = Vector2(120, -8)
+texture = ExtResource("12_spk48")
+
+[node name="Spikes2" type="Sprite2D" parent="Visuals"]
+position = Vector2(520, -8)
+texture = ExtResource("13_spk64")
 
 [node name="Killzone" type="Area2D" parent="."]
 position = Vector2(0, 190)
@@ -104,6 +117,21 @@ position = Vector2(605, -24)
 
 [node name="Shape" type="CollisionShape2D" parent="Exit"]
 shape = SubResource("Rect_Exit")
+
+[node name="Spikes1" type="Area2D" parent="."]
+position = Vector2(120, -8)
+
+[node name="Shape" type="CollisionShape2D" parent="Spikes1"]
+shape = SubResource("Rect_Sp1")
+
+[node name="Spikes2" type="Area2D" parent="."]
+position = Vector2(520, -8)
+
+[node name="Shape" type="CollisionShape2D" parent="Spikes2"]
+shape = SubResource("Rect_Sp2")
+
+[node name="Chaser" parent="." instance=ExtResource("11_chase")]
+position = Vector2(-370, -40)
 
 [node name="HUD" type="CanvasLayer" parent="."]
 layer = 5
@@ -118,6 +146,31 @@ offset_bottom = 30.0
 theme_override_colors/font_color = Color(0.2, 0.25, 0.2, 1)
 theme_override_font_sizes/font_size = 16
 text = "Frutas: 0/6"
+
+[node name="Hearts" type="HBoxContainer" parent="HUD"]
+offset_left = 12.0
+offset_top = 32.0
+offset_right = 70.0
+offset_bottom = 46.0
+theme_override_constants/separation = 4
+
+[node name="Heart1" type="TextureRect" parent="HUD/Hearts"]
+custom_minimum_size = Vector2(14, 14)
+texture = ExtResource("14_heart")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Heart2" type="TextureRect" parent="HUD/Hearts"]
+custom_minimum_size = Vector2(14, 14)
+texture = ExtResource("14_heart")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Heart3" type="TextureRect" parent="HUD/Hearts"]
+custom_minimum_size = Vector2(14, 14)
+texture = ExtResource("14_heart")
+expand_mode = 1
+stretch_mode = 5
 
 [node name="MsgLabel" type="Label" parent="HUD"]
 unique_name_in_owner = true
@@ -153,16 +206,10 @@ position = Vector2(-48, 0)
 text = "M2"
 
 [node name="M3" parent="." instance=ExtResource("4_mile")]
-position = Vector2(340, 0)
+position = Vector2(40, 0)
 
 [node name="Tag" parent="M3"]
 text = "M3"
-
-[node name="M4" parent="." instance=ExtResource("4_mile")]
-position = Vector2(310, -160)
-
-[node name="Tag" parent="M4"]
-text = "M4"
 
 [node name="M5" parent="." instance=ExtResource("4_mile")]
 position = Vector2(560, 0)
@@ -179,19 +226,19 @@ position = Vector2(-200, -88)
 sprite = ExtResource("10_straw")
 
 [node name="F3" parent="." instance=ExtResource("8_gem")]
-position = Vector2(100, -118)
+position = Vector2(120, -48)
 sprite = ExtResource("9_apple")
 
 [node name="F4" parent="." instance=ExtResource("8_gem")]
-position = Vector2(290, -188)
+position = Vector2(250, -110)
 sprite = ExtResource("10_straw")
 
 [node name="F5" parent="." instance=ExtResource("8_gem")]
-position = Vector2(364, -188)
+position = Vector2(540, -48)
 sprite = ExtResource("9_apple")
 
 [node name="F6" parent="." instance=ExtResource("8_gem")]
-position = Vector2(540, -28)
+position = Vector2(430, -70)
 sprite = ExtResource("10_straw")
 
 [node name="TouchControls" type="CanvasLayer" parent="."]
@@ -256,5 +303,5 @@ offset_top = 6.0
 offset_right = 472.0
 offset_bottom = 24.0
 theme_override_font_sizes/font_size = 12
-text = "A salta (x2 doble) · B dash · R reinicia · reportar por M1-M5"
+text = "A salta (x2) · B dash · ¡QUE NO TE AGARRE!"
 horizontal_alignment = 1

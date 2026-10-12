@@ -134,6 +134,18 @@ def gen_sky():
     c.save("bg_sky.png")
 
 
+def gen_heart():
+    """Corazón 14px para la vida."""
+    c = C(14, 14)
+    for y, row in enumerate([".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."]):
+        for x, ch in enumerate(row):
+            if ch == "X":
+                c.rect(x * 2, 1 + y * 2, x * 2 + 1, 2 + y * 2, (217, 69, 82, 255))
+    c.px(2, 3, WHITE)
+    c.px(3, 3, WHITE)
+    c.save("heart.png")
+
+
 def gen_hills():
     c = C(480, 120)
     for x in range(480):
@@ -158,6 +170,7 @@ def main():
     gen_kid()
     gen_sky()
     gen_hills()
+    gen_heart()
 
 
 if __name__ == "__main__":

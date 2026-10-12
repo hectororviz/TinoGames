@@ -1,5 +1,5 @@
 extends Node2D
-## Pantalla de juego: pinta tiles PA sobre la colisión, cámara, foso, meta y R.
+## Nivel persecución: cuenta regresiva, pinchos, meta y reinicio de ronda.
 
 
 const TILESET_TEX: Texture2D = preload("res://art/tiles_pa.png")
@@ -52,7 +52,13 @@ func _build_tiles() -> void:
 			layer.set_cell(cell, 0, Vector2i(idx, 0))
 
 
+var _cd: float = 3.0
+var _last_n: int = 4
+var _won: bool = false
+
+
 func _ready() -> void:
+	add_to_group("main")
 	_build_tiles()
 	var cam := get_tree().get_first_node_in_group("player_camera") as Camera2D
 	if cam != null:
@@ -61,20 +67,73 @@ func _ready() -> void:
 		cam.limit_right = 660
 		cam.limit_bottom = 120
 	($Killzone as Area2D).body_entered.connect(_on_killzone_body)
+	($Spikes1 as Area2D).body_entered.connect(_on_spike_body.bind($Spikes1 as Area2D))
+	($Spikes2 as Area2D).body_entered.connect(_on_spike_body.bind($Spikes2 as Area2D))
 	($Exit as Area2D).body_entered.connect(_on_exit_body)
 
 
-func _on_exit_body(body: Node2D) -> void:
-	if not body.has_method("respawn"):
+func _hud() -> Node:
+	return get_tree().get_first_node_in_group("hud")
+
+
+func _process(delta: float) -> void:
+	if _won:
 		return
-	var hud := get_tree().get_first_node_in_group("hud")
+	if _cd > 0.0:
+		_cd -= delta
+		var n := int(ceil(_cd))
+		if n != _last_n and n >= 1:
+			_last_n = n
+			var hud := _hud()
+			if hud != null and hud.has_method("show_msg"):
+				hud.call("show_msg", str(n))
+		if _cd <= 0.0:
+			var chaser := get_tree().get_first_node_in_group("chaser")
+			if chaser != null and chaser.has_method("activate"):
+				chaser.call("activate")
+			var hud2 := _hud()
+			if hud2 != null and hud2.has_method("show_msg"):
+				hud2.call("show_msg", "¡CORRE QUE TE AGARRA!")
+
+
+func restart_round() -> void:
+	_won = false
+	_cd = 3.0
+	_last_n = 4
+	var player := get_tree().get_first_node_in_group("player")
+	if player != null:
+		if player.has_method("full_heal"):
+			player.call("full_heal")
+		if player.has_method("respawn"):
+			player.call("respawn")
+	var chaser := get_tree().get_first_node_in_group("chaser")
+	if chaser != null and chaser.has_method("reset"):
+		chaser.call("reset")
+	var hud := _hud()
 	if hud != null and hud.has_method("show_msg"):
-		hud.show_msg("¡META! ¿Otra vuelta? Pulsa R")
+		hud.call("show_msg", "¡Otra vez! Tomá ventaja...")
 
 
 func _on_killzone_body(body: Node2D) -> void:
 	if body.has_method("respawn"):
 		body.respawn()
+
+
+func _on_spike_body(body: Node2D, spike: Area2D) -> void:
+	if body.has_method("take_damage") and body.has_method("respawn"):
+		body.take_damage(1, spike.global_position)
+
+
+func _on_exit_body(body: Node2D) -> void:
+	if _won or not body.has_method("respawn"):
+		return
+	_won = true
+	var chaser := get_tree().get_first_node_in_group("chaser")
+	if chaser != null:
+		chaser.set("active", false)
+	var hud := _hud()
+	if hud != null and hud.has_method("show_msg"):
+		hud.call("show_msg", "¡ESCAPASTE! ¿Otra vuelta? Pulsa R")
 
 
 func _unhandled_input(event: InputEvent) -> void:

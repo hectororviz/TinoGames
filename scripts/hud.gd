@@ -11,6 +11,13 @@ func _ready() -> void:
 	(%FruitLabel as Label).text = _counter()
 	(%MsgLabel as Label).hide()
 	(%MsgTimer as Timer).timeout.connect((_msg() as Label).hide)
+	set_hearts(3)
+
+
+func set_hearts(n: int) -> void:
+	var hearts := get_node("Hearts")
+	for i in hearts.get_child_count():
+		(hearts.get_child(i) as CanvasItem).visible = i < n
 
 
 func _msg() -> Label:
