@@ -112,7 +112,7 @@ export class MenuScene extends Phaser.Scene {
     }
     const who = document.createElement('span');
     who.className = 'nm';
-    who.textContent = '…';
+    who.textContent = 'Hola…';
     const outBtn = document.createElement('button');
     outBtn.type = 'button';
     outBtn.textContent = 'Salir';
@@ -124,7 +124,7 @@ export class MenuScene extends Phaser.Scene {
     box.append(who, outBtn);
     me().then(
       (u) => {
-        who.textContent = u.email;
+        who.textContent = `Hola, ${u.email}`;
       },
       () => {
         logout();
@@ -159,7 +159,13 @@ export class MenuScene extends Phaser.Scene {
   private renderMine(): void {
     const box = document.getElementById('menu-mine')!;
     box.textContent = '';
-    if (!getToken()) return;
+    if (!getToken()) {
+      const empty = document.createElement('div');
+      empty.id = 'menu-empty';
+      empty.textContent = 'Entrá con tu cuenta para ver tus niveles del servidor.';
+      box.appendChild(empty);
+      return;
+    }
     const loading = document.createElement('div');
     loading.id = 'menu-empty';
     loading.textContent = 'Cargando mis niveles…';

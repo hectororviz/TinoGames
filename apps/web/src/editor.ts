@@ -89,7 +89,7 @@ export class EditorScene extends Phaser.Scene {
   private openId: string | undefined;
   private pendingName = '';
   private dirty = false;
-  private tool: Tool = 'ground';
+  private tool: Tool | null = 'ground';
   private tileVariant = 0;
   private playerSkin = 'pink';
   private enemySkin = 'pig';
@@ -99,6 +99,8 @@ export class EditorScene extends Phaser.Scene {
   private obstacle = 'spikes';
   private decoSkin = 'box1';
   private gridGraphics!: Phaser.GameObjects.Graphics;
+  private ghost!: Phaser.GameObjects.Image;
+  private ghostRect!: Phaser.GameObjects.Graphics;
   private sprites: Phaser.GameObjects.GameObject[] = [];
   private lastGridKey = '';
   private painting = false;
@@ -106,6 +108,12 @@ export class EditorScene extends Phaser.Scene {
   private downX = 0;
   private downY = 0;
   private lastPaintKey = '';
+  private erasing = false;
+  private hoverX = -1;
+  private hoverY = -1;
+  private past: Level[] = [];
+  private future: Level[] = [];
+  private strokeSnapshot: Level | null = null;
 
   constructor() {
     super('editor');
@@ -186,6 +194,8 @@ export class EditorScene extends Phaser.Scene {
 
   private setupScene(): void {
     this.gridGraphics = this.add.graphics();
+    this.ghost = this.add.image(0, 0, 'tile', 0).setAlpha(0.5).setDepth(100).setVisible(false);
+    this.ghostRect = this.add.graphics().setDepth(100).setVisible(false);
     this.centerCamera();
     this.renderLevel();
     this.bindUi();
@@ -261,6 +271,7 @@ export class EditorScene extends Phaser.Scene {
     if (!this.confirmDiscard()) return;
     const entry = findLevel(id);
     if (!entry) return;
+    this.pushHistory();
     this.openId = entry.id;
     this.pendingName = entry.name;
     this.level = cloneLevel(entry.level);
@@ -275,6 +286,7 @@ export class EditorScene extends Phaser.Scene {
 
   private newDraft(): void {
     if (!this.confirmDiscard()) return;
+    this.pushHistory();
     this.openId = undefined;
     this.pendingName = '';
     this.level = blankLevel();
@@ -292,6 +304,96 @@ export class EditorScene extends Phaser.Scene {
     return confirm('Cambios sin guardar. ¿Seguir igual?');
   }
 
+  private pushHistory(): void {
+    this.past.push(cloneLevel(this.level));
+    if (this.past.length > 60) this.past.shift();
+    this.future = [];
+  }
+
+  private restore(level: Level): void {
+    this.level = cloneLevel(level);
+    this.dirty = true;
+    this.lastPaintKey = '';
+    this.renderLevel();
+    this.updateStatus();
+  }
+
+  private undo(): void {
+    const prev = this.past.pop();
+    if (!prev) return;
+    this.future.push(cloneLevel(this.level));
+    this.restore(prev);
+  }
+
+  private redo(): void {
+    const next = this.future.pop();
+    if (!next) return;
+    this.past.push(cloneLevel(this.level));
+    if (this.past.length > 60) this.past.shift();
+    this.restore(next);
+  }
+
+  private toolTab(tool: Tool | null): string {
+    switch (tool) {
+      case 'ground': return 'piso';
+      case 'player_start': return 'personaje';
+      case 'enemy': return 'enemigos';
+      case 'fruit': return 'frutas';
+      case 'gem': return 'gemas';
+      case 'spikes': return 'obstaculos';
+      default: return 'otros';
+    }
+  }
+
+  private gotoTab(tab: string): void {
+    document.querySelectorAll<HTMLElement>('#ed-tabs [data-edtab]').forEach((b) => {
+      b.classList.toggle('active', b.getAttribute('data-edtab') === tab);
+    });
+    document.querySelectorAll<HTMLElement>('#ed-grids [data-edgrid]').forEach((g) => {
+      g.hidden = g.getAttribute('data-edgrid') !== tab;
+    });
+  }
+
+  private setTool(tool: Tool | null): void {
+    this.tool = tool;
+    this.refreshSelection();
+    if (tool) this.gotoTab(this.toolTab(tool));
+  }
+
+  /** Fantasma del objeto actual bajo el cursor. */
+  private updateGhost(tileX: number, tileY: number): void {
+    if (tileX < 0 || tileY < 0) {
+      this.ghost.setVisible(false);
+      this.ghostRect.setVisible(false);
+      return;
+    }
+    if (this.tool === 'erase' || this.erasing) {
+      this.ghost.setVisible(false);
+      this.ghostRect.clear();
+      this.ghostRect.lineStyle(2, 0xff5555, 0.9);
+      this.ghostRect.strokeRect(tileX * T, tileY * T, T, T);
+      this.ghostRect.setVisible(true);
+      return;
+    }
+    this.ghostRect.setVisible(false);
+    if (this.tool === 'ground') {
+      const v = this.tileVariant;
+      const [tex, frame]: [string, number] = v < 10 ? ['tile', v] : ['terrain', v - 10];
+      this.ghost.setTexture(tex, frame).setOrigin(0, 0).setScale(1);
+      this.ghost.setPosition(tileX * T, tileY * T);
+      this.ghost.setVisible(true);
+      return;
+    }
+    const sel = this.currentSelection();
+    if (!sel) {
+      this.ghost.setVisible(false);
+      return;
+    }
+    const p = this.preview(sel.kind, sel.props);
+    this.ghost.setTexture(p.tex, p.frame).setOrigin(0.5, 0.5).setScale(p.h / p.fh);
+    this.ghost.setPosition(tileX * T + T / 2, tileY * T + T / 2);
+    this.ghost.setVisible(true);
+  }
   /** Redibuja la grid solo sobre el rectángulo visible (cubre bordes con zoom/pan). */
   private drawGrid(): void {
     if (!this.gridGraphics) return;
@@ -312,48 +414,55 @@ export class EditorScene extends Phaser.Scene {
     for (let y = top; y <= bottom; y += T) g.lineBetween(left, y, right, y);
   }
 
-  private preview(kind: string, props?: Record<string, unknown>): { tex: string; frame?: number; h: number } {
+  private preview(kind: string, props?: Record<string, unknown>): { tex: string; frame?: number; h: number; fh: number } {
     switch (kind) {
       case 'player_start': {
         const skin = CHAR_SKINS.find((c) => c.id === props?.['skin']) ?? CHAR_SKINS[0];
-        return { tex: skin.idle.key, frame: 0, h: 16 };
+        return { tex: skin.idle.key, frame: 0, h: 16, fh: 32 };
       }
       case 'walker':
       case 'flyer': {
         const skin = ENEMIES.find((s) => s.id === props?.['skin'] && s.kind === kind)
           ?? ENEMIES.find((s) => s.kind === kind)!;
-        return { tex: skin.tex.key, frame: 0, h: 18 };
+        return { tex: skin.tex.key, frame: 0, h: 18, fh: skin.tex.fh };
       }
       case 'fruit': {
         const f = FRUITS.find((x) => x.id === props?.['skin']) ?? FRUITS[0];
-        return { tex: f.key, frame: 0, h: 14 };
+        return { tex: f.key, frame: 0, h: 14, fh: 32 };
       }
       case 'gem': {
         const gem = GEMS.find((x) => x.id === props?.['color']) ?? GEMS[0];
-        return { tex: gem.key, h: 14 };
+        return { tex: gem.key, h: 14, fh: 32 };
       }
       case 'item':
-        return { tex: 'apple', frame: 0, h: 14 };
+        return { tex: 'apple', frame: 0, h: 14, fh: 32 };
       case 'checkpoint':
-        return { tex: CHECKPOINT.off.key, h: 24 };
+        return { tex: CHECKPOINT.off.key, h: 24, fh: 64 };
       case 'platform': {
         const axis = props?.['axis'];
-        return { tex: axis === 'fall' ? PLATFORMS.faller.key : PLATFORMS.mover.key, frame: 0, h: 10 };
+        return axis === 'fall'
+          ? { tex: PLATFORMS.faller.key, frame: 0, h: 10, fh: 10 }
+          : { tex: PLATFORMS.mover.key, frame: 0, h: 10, fh: 8 };
       }
       case 'spikes': {
         const variant = (props?.['variant'] as string | undefined) ?? 'spikes';
         const def = OBSTACLES.find((o) => o.id === variant) ?? OBSTACLES[0];
-        if (def.tex) return { tex: def.tex.key, frame: 0, h: def.id === 'saw' ? 22 : 18 };
-        return { tex: def.image!.key, h: 18 };
+        if (def.id === 'saw') return { tex: def.tex!.key, frame: 0, h: 22, fh: 38 };
+        if (def.id === 'fire') return { tex: def.tex!.key, frame: 0, h: 18, fh: 32 };
+        if (def.id === 'arrow') return { tex: def.tex!.key, frame: 0, h: 18, fh: 18 };
+        if (def.id === 'trampoline') return { tex: TRAMP_IDLE.key, h: 18, fh: 28 };
+        if (def.id === 'rock') return { tex: def.image!.key, h: 18, fh: 42 };
+        if (def.id === 'spikehead') return { tex: def.image!.key, h: 18, fh: 52 };
+        return { tex: 'spike', h: 18, fh: 16 };
       }
       case 'deco': {
         const d = DECOS.find((x) => x.id === props?.['skin']) ?? DECOS[0];
-        return { tex: d.key, h: 18 };
+        return { tex: d.key, h: 18, fh: d.h };
       }
       case 'exit':
-        return { tex: 'exit', h: 24 };
+        return { tex: 'exit', h: 24, fh: 32 };
       default:
-        return { tex: 'apple', frame: 0, h: 14 };
+        return { tex: 'apple', frame: 0, h: 14, fh: 32 };
     }
   }
 
@@ -375,55 +484,41 @@ export class EditorScene extends Phaser.Scene {
       const p = this.preview(entity.kind, entity.props as Record<string, unknown> | undefined);
       const sprite = this.add.image(cx, cy, p.tex, p.frame);
       sprite.setOrigin(0.5, 0.5);
-      const fh = this.textures.get(p.tex).getSourceImage() as { height?: number };
-      const scale = p.h / ((fh.height as number | undefined) ?? p.h);
-      sprite.setScale(scale);
+      sprite.setScale(p.h / p.fh);
       this.sprites.push(sprite);
     }
   }
 
   private bindUi(): void {
-    const tools = document.querySelectorAll<HTMLElement>('#editor-ui [data-tool]');
-    tools.forEach((btn) => {
-      btn.onclick = () => {
-        const next = btn.getAttribute('data-tool') as Tool | null;
-        if (next) {
-          this.tool = next;
-          this.refreshToolHighlight();
-        }
-      };
-    });
-    this.refreshToolHighlight();
-    this.buildTileGrid();
-    this.refreshTileButton();
-
-    const wire = (id: string, fn: (value: string) => void, current: () => string): void => {
-      const s = selectEl(id);
-      s.value = current();
-      s.onchange = () => {
-        fn(s.value);
-        this.refreshToolHighlight();
-      };
-    };
-    wire('ed-player', (v) => { this.playerSkin = v; this.tool = 'player_start'; }, () => this.playerSkin);
-    wire('ed-enemy', (v) => { this.enemySkin = v; this.tool = 'enemy'; }, () => this.enemySkin);
-    wire('ed-fruit', (v) => { this.fruitSkin = v; this.tool = 'fruit'; }, () => this.fruitSkin);
-    wire('ed-gem', (v) => { this.gemColor = v; this.tool = 'gem'; }, () => this.gemColor);
-    wire('ed-platform', (v) => { this.platformAxis = v; this.tool = 'platform'; }, () => this.platformAxis);
-    wire('ed-obstacle', (v) => { this.obstacle = v; this.tool = 'spikes'; }, () => this.obstacle);
-    wire('ed-deco', (v) => { this.decoSkin = v; this.tool = 'deco'; }, () => this.decoSkin);
-    this.fillCatalogSelects();
+    this.buildTabs();
+    this.buildGrids();
+    this.refreshSelection();
 
     el('ed-collapse').onclick = () => {
       document.body.classList.toggle('ed-collapsed');
+    };
+    el('ed-rotate').onclick = () => {
+      el('ed-rotate').style.display = 'none';
+    };
+    const moreMenu = el('ed-more-menu');
+    el('ed-more').onclick = () => {
+      moreMenu.hidden = !moreMenu.hidden;
     };
     el('ed-validate').onclick = () => this.updateStatus();
     el('ed-save').onclick = () => {
       try {
         this.saveLevel();
-        this.flashStatus(`Nivel "${this.pendingName}" guardado`, true);
       } catch (err) {
         this.flashStatus(err instanceof Error ? err.message : 'No se pudo guardar', false);
+        return;
+      }
+      // Validar automáticamente al guardar: si hay errores se muestran,
+      // si está válido se confirma el guardado.
+      const errors = validateLevel(this.level);
+      if (errors.length === 0) {
+        this.flashStatus(`Nivel "${this.pendingName}" guardado`, true);
+      } else {
+        this.updateStatus();
       }
     };
     el('ed-publish').onclick = () => {
@@ -458,40 +553,196 @@ export class EditorScene extends Phaser.Scene {
     this.refreshOpenList();
   }
 
-  private fillCatalogSelects(): void {
-    fillSelect(selectEl('ed-player'), [
-      { options: CHAR_SKINS.map((c) => ({ value: c.id, label: c.label })) },
-    ]);
-    fillSelect(selectEl('ed-enemy'), [
-      { label: 'Caminantes', options: ENEMIES.filter((e) => e.kind === 'walker').map((e) => ({ value: e.id, label: e.label })) },
-      { label: 'Voladores', options: ENEMIES.filter((e) => e.kind === 'flyer').map((e) => ({ value: e.id, label: e.label })) },
-    ]);
-    fillSelect(selectEl('ed-fruit'), [
-      { options: FRUITS.map((f) => ({ value: f.id, label: f.label })) },
-    ]);
-    fillSelect(selectEl('ed-gem'), [
-      { options: GEMS.map((g) => ({ value: g.id, label: g.label })) },
-    ]);
-    fillSelect(selectEl('ed-obstacle'), [
-      { options: OBSTACLES.map((o) => ({ value: o.id, label: o.label })) },
-    ]);
-    fillSelect(selectEl('ed-deco'), [
-      { options: DECOS.map((d) => ({ value: d.id, label: d.label })) },
-    ]);
-    selectEl('ed-player').value = this.playerSkin;
-    selectEl('ed-enemy').value = this.enemySkin;
-    selectEl('ed-fruit').value = this.fruitSkin;
-    selectEl('ed-gem').value = this.gemColor;
-    selectEl('ed-platform').value = this.platformAxis;
-    selectEl('ed-obstacle').value = this.obstacle;
-    selectEl('ed-deco').value = this.decoSkin;
+  private buildTabs(): void {
+    const tabs = document.querySelectorAll<HTMLElement>('#ed-tabs [data-edtab]');
+    tabs.forEach((btn) => {
+      btn.onclick = () => {
+        tabs.forEach((b) => b.classList.toggle('active', b === btn));
+        const tab = btn.getAttribute('data-edtab');
+        document.querySelectorAll<HTMLElement>('#ed-grids [data-edgrid]').forEach((g) => {
+          g.hidden = g.getAttribute('data-edgrid') !== tab;
+        });
+      };
+    });
+  }
+
+  /** Miniatura 40px de un frame de spritesheet (frame 0). */
+  private sheetThumb(url: string, fw: number, fh: number, frames: number, h = 36): Record<string, string> {
+    const k = h / fh;
+    return {
+      backgroundImage: `url("${url}")`,
+      backgroundSize: `${Math.round(frames * fw * k)}px ${Math.round(fh * k)}px`,
+      backgroundPosition: '0 0',
+    };
+  }
+
+  private optBtn(
+    grid: HTMLElement,
+    title: string,
+    style: Record<string, string>,
+    select: () => void,
+    isSel: () => boolean,
+  ): void {
+    const opt = document.createElement('button');
+    opt.type = 'button';
+    opt.className = 'opt';
+    opt.title = title;
+    opt.style.backgroundImage = style['backgroundImage'];
+    opt.style.backgroundSize = style['backgroundSize'];
+    opt.style.backgroundPosition = style['backgroundPosition'];
+    opt.onclick = () => {
+      select();
+      this.refreshSelection();
+      if (this.tool) this.gotoTab(this.toolTab(this.tool));
+    };
+    this.optBtns.push({ btn: opt, isSel });
+    grid.appendChild(opt);
+  }
+
+  private sectLabel(grid: HTMLElement, text: string): void {
+    const s = document.createElement('div');
+    s.className = 'ed-sect';
+    s.textContent = text;
+    grid.appendChild(s);
+  }
+
+  private optBtns: { btn: HTMLButtonElement; isSel: () => boolean }[] = [];
+
+  private gridEl(tab: string): HTMLElement {
+    const grid = document.querySelector<HTMLElement>(`#ed-grids [data-edgrid="${tab}"]`);
+    if (!grid) throw new Error(`missing grid ${tab}`);
+    return grid;
+  }
+
+  private buildGrids(): void {
+    this.optBtns = [];
+    // Piso: 252 variantes.
+    {
+      const grid = this.gridEl('piso');
+      for (let v = 0; v < TILE_VARIANTS; v++) {
+        const style = this.tileThumb(v);
+        this.optBtn(grid, `Piso ${v}`, style, () => {
+          this.tileVariant = v;
+          this.tool = 'ground';
+        }, () => this.tool === 'ground' && this.tileVariant === v);
+      }
+    }
+    // Personaje.
+    {
+      const grid = this.gridEl('personaje');
+      for (const c of CHAR_SKINS) {
+        this.optBtn(grid, c.label, this.sheetThumb(c.idle.url, 32, 32, c.idle.frames), () => {
+          this.playerSkin = c.id;
+          this.tool = 'player_start';
+        }, () => this.tool === 'player_start' && this.playerSkin === c.id);
+      }
+    }
+    // Enemigos.
+    {
+      const grid = this.gridEl('enemigos');
+      this.sectLabel(grid, 'Caminantes');
+      for (const e of ENEMIES.filter((x) => x.kind === 'walker')) {
+        this.optBtn(grid, e.label, this.sheetThumb(e.tex.url, e.tex.fw, e.tex.fh, e.tex.frames), () => {
+          this.enemySkin = e.id;
+          this.tool = 'enemy';
+        }, () => this.tool === 'enemy' && this.enemySkin === e.id);
+      }
+      this.sectLabel(grid, 'Voladores');
+      for (const e of ENEMIES.filter((x) => x.kind === 'flyer')) {
+        this.optBtn(grid, e.label, this.sheetThumb(e.tex.url, e.tex.fw, e.tex.fh, e.tex.frames), () => {
+          this.enemySkin = e.id;
+          this.tool = 'enemy';
+        }, () => this.tool === 'enemy' && this.enemySkin === e.id);
+      }
+    }
+    // Frutas.
+    {
+      const grid = this.gridEl('frutas');
+      for (const f of FRUITS) {
+        const sheet = FRUIT_SHEETS.find((s) => s.key === f.key)!;
+        this.optBtn(grid, f.label, this.sheetThumb(sheet.url, 32, 32, sheet.frames), () => {
+          this.fruitSkin = f.id;
+          this.tool = 'fruit';
+        }, () => this.tool === 'fruit' && this.fruitSkin === f.id);
+      }
+    }
+    // Gemas.
+    {
+      const grid = this.gridEl('gemas');
+      for (const g of GEMS) {
+        this.optBtn(grid, g.label, this.sheetThumb(g.url, 32, 32, 1), () => {
+          this.gemColor = g.id;
+          this.tool = 'gem';
+        }, () => this.tool === 'gem' && this.gemColor === g.id);
+      }
+    }
+    // Obstáculos.
+    {
+      const grid = this.gridEl('obstaculos');
+      const dims: Record<string, [string, number, number, number]> = {
+        spikes: [OBSTACLES[0].image!.url, 16, 16, 1],
+        saw: [OBSTACLES[1].tex!.url, 38, 38, 8],
+        fire: [OBSTACLES[2].tex!.url, 16, 32, 3],
+        arrow: [OBSTACLES[3].tex!.url, 18, 18, 10],
+        rock: [OBSTACLES[4].image!.url, 42, 42, 1],
+        spikehead: [OBSTACLES[5].image!.url, 54, 52, 1],
+        trampoline: [TRAMP_IDLE.url, 28, 28, 1],
+      };
+      for (const o of OBSTACLES) {
+        const [url, fw, fh, frames] = dims[o.id]!;
+        this.optBtn(grid, o.label, this.sheetThumb(url, fw, fh, frames), () => {
+          this.obstacle = o.id;
+          this.tool = 'spikes';
+        }, () => this.tool === 'spikes' && this.obstacle === o.id);
+      }
+    }
+    // Otros.
+    {
+      const grid = this.gridEl('otros');
+      this.optBtn(grid, 'Item', this.sheetThumb(FRUIT_SHEETS[0].url, 32, 32, 17), () => {
+        this.tool = 'item';
+      }, () => this.tool === 'item');
+      this.optBtn(grid, 'Checkpoint', this.sheetThumb(CHECKPOINT.off.url, 64, 64, 1), () => {
+        this.tool = 'checkpoint';
+      }, () => this.tool === 'checkpoint');
+      this.optBtn(grid, 'Plataforma móvil', this.sheetThumb(PLATFORMS.mover.url, 32, 8, 8), () => {
+        this.platformAxis = 'x';
+        this.tool = 'platform';
+      }, () => this.tool === 'platform' && this.platformAxis === 'x');
+      this.optBtn(grid, 'Plataforma que cae', this.sheetThumb(PLATFORMS.faller.url, 32, 10, 4), () => {
+        this.platformAxis = 'fall';
+        this.tool = 'platform';
+      }, () => this.tool === 'platform' && this.platformAxis === 'fall');
+      for (const d of DECOS) {
+        this.optBtn(grid, d.label, this.sheetThumb(d.url, d.w, d.h, 1), () => {
+          this.decoSkin = d.id;
+          this.tool = 'deco';
+        }, () => this.tool === 'deco' && this.decoSkin === d.id);
+      }
+      this.optBtn(grid, 'Salida', this.sheetThumb(EXIT_DOOR.idle.url, 64, 64, 1), () => {
+        this.tool = 'exit';
+      }, () => this.tool === 'exit');
+      const erase = document.createElement('button');
+      erase.type = 'button';
+      erase.className = 'opt text';
+      erase.textContent = '⌫ Goma';
+      erase.title = 'Borrar';
+      erase.onclick = () => {
+        this.tool = 'erase';
+        this.refreshSelection();
+      };
+      this.optBtns.push({ btn: erase, isSel: () => this.tool === 'erase' });
+      grid.appendChild(erase);
+    }
+  }
+
+  private refreshSelection(): void {
+    for (const o of this.optBtns) o.btn.classList.toggle('sel', o.isSel());
+    this.updateGhost(this.hoverX, this.hoverY);
   }
 
   private refreshToolHighlight(): void {
-    const tools = document.querySelectorAll<HTMLElement>('#editor-ui [data-tool]');
-    tools.forEach((btn) => {
-      btn.classList.toggle('active', btn.getAttribute('data-tool') === this.tool);
-    });
+    this.refreshSelection();
   }
 
   /** Estilo de miniatura para una variante de piso (escala 2x). */
@@ -513,48 +764,9 @@ export class EditorScene extends Phaser.Scene {
     };
   }
 
-  private refreshTileButton(): void {
-    const btn = document.getElementById('ed-tile-btn');
-    if (!btn) return;
-    const style = this.tileThumb(this.tileVariant);
-    btn.style.backgroundImage = style['backgroundImage'];
-    btn.style.backgroundSize = style['backgroundSize'];
-    btn.style.backgroundPosition = style['backgroundPosition'];
-  }
-
-  private buildTileGrid(): void {
-    const grid = document.getElementById('ed-tile-grid');
-    const btn = document.getElementById('ed-tile-btn');
-    if (!grid || !btn || grid.childElementCount > 0) return;
-    for (let v = 0; v < TILE_VARIANTS; v++) {
-      const opt = document.createElement('button');
-      opt.type = 'button';
-      opt.title = `Piso ${v}`;
-      opt.dataset['v'] = String(v);
-      const style = this.tileThumb(v);
-      opt.style.backgroundImage = style['backgroundImage'];
-      opt.style.backgroundSize = style['backgroundSize'];
-      opt.style.backgroundPosition = style['backgroundPosition'];
-      opt.onclick = () => {
-        this.tileVariant = v;
-        this.tool = 'ground';
-        this.refreshToolHighlight();
-        this.refreshTileButton();
-        grid.querySelectorAll('button').forEach((b) => {
-          b.classList.toggle('sel', b === opt);
-        });
-        grid.hidden = true;
-      };
-      grid.appendChild(opt);
-    }
-    btn.onclick = () => {
-      grid.hidden = !grid.hidden;
-      if (!grid.hidden) {
-        const r = btn.getBoundingClientRect();
-        grid.style.top = `${r.bottom + 4}px`;
-        grid.style.left = `${Math.max(4, r.left)}px`;
-      }
-    };
+  private updateCoords(x: number, y: number): void {
+    const node = document.getElementById('ed-coords');
+    if (node) node.textContent = x >= 0 && y >= 0 ? `celda ${x},${y}` : '';
   }
 
   private setStatus(text: string, ok: boolean): void {
@@ -629,6 +841,7 @@ export class EditorScene extends Phaser.Scene {
         try {
           const level = JSON.parse(reader.result as string) as Level;
           if (level.format === 2) {
+            this.pushHistory();
             this.level = level;
             this.dirty = true;
             this.centerCamera();
@@ -662,17 +875,31 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
+    this.input.mouse?.disableContextMenu();
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.painting = true;
       this.panning = false;
+      this.erasing = pointer.rightButtonDown();
       this.downX = pointer.x;
       this.downY = pointer.y;
       this.lastPaintKey = '';
+      this.strokeSnapshot = cloneLevel(this.level);
       this.paintAt(pointer);
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      const hover = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      const hx = Math.floor(hover.x / T);
+      const hy = Math.floor(hover.y / T);
+      this.hoverX = hx;
+      this.hoverY = hy;
+      this.updateGhost(hx, hy);
+      this.updateCoords(hx, hy);
       if (!this.painting || !pointer.isDown) return;
+      if (this.erasing) {
+        this.paintAt(pointer);
+        return;
+      }
       if (!this.panning) {
         const dx = pointer.x - this.downX;
         const dy = pointer.y - this.downY;
@@ -691,8 +918,15 @@ export class EditorScene extends Phaser.Scene {
     });
 
     const stop = (): void => {
+      if (this.strokeSnapshot && JSON.stringify(this.strokeSnapshot) !== JSON.stringify(this.level)) {
+        this.past.push(this.strokeSnapshot);
+        if (this.past.length > 60) this.past.shift();
+        this.future = [];
+      }
+      this.strokeSnapshot = null;
       this.painting = false;
       this.panning = false;
+      this.erasing = false;
     };
     this.input.on('pointerup', stop);
     this.input.on('pointerupoutside', stop);
@@ -711,9 +945,41 @@ export class EditorScene extends Phaser.Scene {
     );
 
     this.input.keyboard?.on('keydown-E', () => {
-      this.tool = 'erase';
-      this.refreshToolHighlight();
+      this.setTool('erase');
     });
+
+    this.input.keyboard?.on('keydown-ESC', () => {
+      this.setTool(null);
+    });
+    this.input.keyboard?.on('keydown-SPACE', (e: KeyboardEvent) => {
+      if (this.typing()) return;
+      e.preventDefault();
+      this.testLevel();
+    });
+    const digits: (Tool | null)[] = ['ground', 'player_start', 'enemy', 'fruit', 'gem', 'spikes', 'checkpoint', 'platform', 'deco'];
+    digits.forEach((tool, i) => {
+      this.input.keyboard?.on(`keydown-${i + 1}`, () => {
+        if (this.typing()) return;
+        this.setTool(tool);
+      });
+    });
+    this.input.keyboard?.on('keydown-Z', (e: KeyboardEvent) => {
+      if (this.typing() || !e.ctrlKey) return;
+      e.preventDefault();
+      if (e.shiftKey) this.redo();
+      else this.undo();
+    });
+    this.input.keyboard?.on('keydown-Y', (e: KeyboardEvent) => {
+      if (this.typing() || !e.ctrlKey) return;
+      e.preventDefault();
+      this.redo();
+    });
+  }
+
+  /** True si el foco está en un campo de texto (no robar atajos). */
+  private typing(): boolean {
+    const tag = document.activeElement?.tagName;
+    return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
   }
 
   private paintAt(pointer: Phaser.Input.Pointer): void {
@@ -727,6 +993,9 @@ export class EditorScene extends Phaser.Scene {
     this.lastPaintKey = key;
 
     if (this.tool === 'erase') {
+      this.eraseAt(tileX, tileY);
+    } else if (this.erasing) {
+      // Clic derecho: borrar sin cambiar la herramienta activa.
       this.eraseAt(tileX, tileY);
     } else if (this.tool === 'ground') {
       this.paintGround(tileX, tileY);
@@ -748,59 +1017,44 @@ export class EditorScene extends Phaser.Scene {
     }
   }
 
-  private paintEntity(x: number, y: number): void {
-    let kind: Entity['kind'];
-    const props: Record<string, unknown> = {};
+  private currentSelection(): { kind: Entity['kind']; props: Record<string, unknown> } | null {
     switch (this.tool) {
       case 'player_start':
-        kind = 'player_start';
-        if (this.playerSkin !== 'pink') props['skin'] = this.playerSkin;
-        break;
+        return { kind: 'player_start', props: this.playerSkin !== 'pink' ? { skin: this.playerSkin } : {} };
       case 'enemy': {
         const skin = ENEMIES.find((s) => s.id === this.enemySkin) ?? ENEMIES[0];
-        kind = skin.kind;
-        props['skin'] = skin.id;
+        const props: Record<string, unknown> = { skin: skin.id };
         if (skin.kind === 'walker') {
           props['range'] = skin.range ?? 4;
           props['speed'] = skin.speed ?? 40;
         }
-        break;
+        return { kind: skin.kind, props };
       }
       case 'fruit':
-        kind = 'fruit';
-        props['skin'] = this.fruitSkin;
-        break;
+        return { kind: 'fruit', props: { skin: this.fruitSkin } };
       case 'gem':
-        kind = 'gem';
-        props['color'] = this.gemColor;
-        break;
+        return { kind: 'gem', props: { color: this.gemColor } };
       case 'item':
-        kind = 'item';
-        break;
+        return { kind: 'item', props: {} };
       case 'checkpoint':
-        kind = 'checkpoint';
-        break;
+        return { kind: 'checkpoint', props: {} };
       case 'platform':
-        kind = 'platform';
-        props['axis'] = this.platformAxis;
-        props['range'] = 3;
-        props['speed'] = 50;
-        break;
+        return { kind: 'platform', props: { axis: this.platformAxis, range: 3, speed: 50 } };
       case 'spikes':
-        kind = 'spikes';
-        if (this.obstacle !== 'spikes') props['variant'] = this.obstacle;
-        break;
+        return { kind: 'spikes', props: this.obstacle !== 'spikes' ? { variant: this.obstacle } : {} };
       case 'deco':
-        kind = 'deco';
-        props['skin'] = this.decoSkin;
-        break;
+        return { kind: 'deco', props: { skin: this.decoSkin } };
       case 'exit':
-        kind = 'exit';
-        props['needsAllItems'] = true;
-        break;
+        return { kind: 'exit', props: { needsAllItems: true } };
       default:
-        return;
+        return null;
     }
+  }
+
+  private paintEntity(x: number, y: number): void {
+    const sel = this.currentSelection();
+    if (!sel) return;
+    const { kind, props } = sel;
     if (kind === 'player_start' || kind === 'exit') {
       this.level.entities = this.level.entities.filter((e) => e.kind !== kind);
     }

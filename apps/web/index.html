@@ -15,6 +15,8 @@
       #app { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
       #touch { position: absolute; left: 0; right: 0; bottom: 0; display: none; justify-content: space-between; padding: 12px; pointer-events: none; }
       body.playing #touch { display: flex; }
+      body.editing #stage { width: 100%; max-width: none; }
+      body.editing #game-frame { width: min(100% - 240px, calc((100vh - 220px) * 16 / 9)); margin-inline: auto; }
       #touch .grp { display: flex; gap: 12px; }
       #touch button { pointer-events: auto; width: 64px; height: 64px; font-size: 24px; border-radius: 50%; border: none; opacity: 0.65; touch-action: none; }
       #ad-slot { width: 100%; min-height: 100px; display: flex; flex-direction: column;
@@ -22,14 +24,30 @@
         background: #6f97c8; color: #e8f1fb; font-family: system-ui, sans-serif; font-size: 12px; }
       #ad-slot:empty { display: none; }
       @media (max-width: 600px) { #ad-slot { min-height: 60px; } }
-      #editor-ui { display: none; position: fixed; top: 0; left: 0; bottom: 0; width: 224px; z-index: 10;
-        background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif;
-        font-size: 14px; padding: 8px; user-select: none; overflow-y: auto; }
+      #editor-ui { display: none; }
       body.editing #editor-ui { display: block; }
       body.editing #touch { display: none; }
+      #ed-topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 10; min-height: 48px;
+        display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 6px 8px;
+        background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif; font-size: 14px; }
+      #ed-topbar #ed-name { flex: 1 1 140px; min-width: 100px; }
+      #ed-topbar #ed-open { max-width: 160px; }
+      #ed-more-wrap { position: relative; }
+      #ed-more-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
+        display: flex; flex-direction: column; gap: 4px; background: #23233d;
+        border: 1px solid #55557a; border-radius: 8px; padding: 6px; min-width: 140px; }
+      #ed-more-menu[hidden] { display: none; }
+      #ed-more-menu button { text-align: left; }
+      #ed-panel { position: fixed; left: 0; top: 48px; bottom: 32px; width: 224px; z-index: 10;
+        background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif;
+        font-size: 14px; padding: 8px; user-select: none; overflow-y: auto;
+        display: flex; flex-direction: column; gap: 8px; }
       body.ed-collapsed #ed-panel { display: none; }
-      body.ed-collapsed #editor-ui { width: auto; bottom: auto; border-radius: 0 0 8px 0; }
-      #ed-collapse { width: 100%; margin-bottom: 6px; }
+      #ed-statusbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; min-height: 32px;
+        display: flex; gap: 12px; align-items: center; padding: 4px 12px;
+        background: #141428; color: #fff; font-family: system-ui, sans-serif; font-size: 13px; }
+      body.ed-collapsed #ed-statusbar { left: 0; }
+      #ed-coords { margin-left: auto; color: #aaaacc; }
       #editor-ui .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
       #editor-ui .row + .row, #editor-ui .grp + .grp, #editor-ui .grp + .row, #editor-ui .row + .grp { margin-top: 8px; }
       #editor-ui .grp { display: flex; flex-direction: column; gap: 4px; background: #23233d;
@@ -38,9 +56,19 @@
       #editor-ui .grp .line { display: flex; gap: 6px; align-items: center; }
       #editor-ui .grp .line select { flex: 1; min-width: 0; }
       #editor-ui button { font-size: 14px; line-height: 1; color: #fff; background: #33334d;
-        border: 1px solid #55557a; border-radius: 6px; padding: 7px 10px; cursor: pointer; }
+        border: 1px solid #55557a; border-radius: 6px; padding: 7px 10px; cursor: pointer; min-height: 36px; }
       #editor-ui button:hover { background: #44446a; }
       #editor-ui button.active { background: #4a9eff; border-color: #4a9eff; }
+      #editor-ui button.primary { background: #4a9eff; border-color: #4a9eff; font-weight: 600; }
+      #editor-ui select, #editor-ui input[type="text"] { min-height: 36px; box-sizing: border-box; }
+      #ed-rotate { display: none; position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
+        z-index: 40; background: #f5a623; color: #1a1a2e; font-family: system-ui, sans-serif;
+        font-size: 14px; font-weight: 600; border-radius: 8px; padding: 10px 16px; cursor: pointer;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+      @media (max-width: 700px) and (orientation: portrait) {
+        body.editing #ed-rotate { display: block; }
+        #ed-panel { width: 188px; }
+      }
       #editor-ui #ed-status { margin-left: 8px; font-size: 13px; }
       #editor-ui #ed-status.ok { color: #44ff44; }
       #editor-ui #ed-status.err { color: #ff6666; }
@@ -48,15 +76,14 @@
         font-size: 14px; font-family: system-ui, sans-serif; color: #fff; background: #33334d;
         border: 1px solid #55557a; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
       body.playing #game-back { display: block; }
-      #menu-ui { display: none; position: fixed; left: 0; right: 0; top: 118px; z-index: 10;
+      #menu-ui { display: none; width: 100%; box-sizing: border-box;
         font-family: system-ui, sans-serif; color: #fff; font-size: 14px;
-        flex-direction: column; align-items: center; gap: 8px; padding: 0 16px;
-        max-height: calc(100vh - 130px); overflow-y: auto; }
+        flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 16px 24px; }
       body.menu #menu-ui { display: flex; }
-      #menu-ui #menu-list { display: flex; flex-direction: column; gap: 8px; width: min(420px, 92vw); }
-      #menu-ui #menu-mine { display: flex; flex-direction: column; gap: 8px; width: min(420px, 92vw); }
+      #menu-ui #menu-list { display: flex; flex-direction: column; gap: 8px; }
+      #menu-ui #menu-mine { display: flex; flex-direction: column; gap: 8px; }
       #menu-ui #menu-sect { color: #aaaacc; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-top: 6px; }
-      #menu-ui #menu-auth, #menu-ui #menu-pinrow { display: flex; gap: 6px; align-items: center; width: min(420px, 92vw); flex-wrap: wrap; justify-content: center; }
+      #menu-ui #menu-auth, #menu-ui #menu-pinrow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
       #menu-ui input[type="text"], #menu-ui input[type="email"], #menu-ui input[type="password"] { font-size: 14px; color: #fff; background: #23233d;
         border: 1px solid #55557a; border-radius: 6px; padding: 7px 10px; min-width: 0; }
       #menu-ui #menu-pin-err, #menu-ui .bad { color: #ff8888; font-size: 12px; }
@@ -75,14 +102,21 @@
         border: 1px solid #55557a; border-radius: 6px; padding: 6px 8px; max-width: 180px; }
       #ed-tile-btn { width: 36px; height: 36px; padding: 0; image-rendering: pixelated;
         background-repeat: no-repeat; }
-      #ed-tile-grid { position: fixed; z-index: 20; max-width: min(560px, 94vw); max-height: 50vh;
-        overflow: auto; background: #23233d; border: 1px solid #55557a; border-radius: 8px;
-        padding: 8px; display: grid; grid-template-columns: repeat(auto-fill, 32px); gap: 4px; }
-      #ed-tile-grid[hidden] { display: none; }
-      #ed-tile-grid button { width: 32px; height: 32px; padding: 0; image-rendering: pixelated;
-        background-repeat: no-repeat; background-color: #1a1a2e;
-        border: 1px solid #44446a; border-radius: 4px; cursor: pointer; }
-      #ed-tile-grid button.sel { border-color: #4a9eff; outline: 2px solid #4a9eff; }
+      #ed-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+      #ed-tabs button { flex: 1 1 auto; padding: 7px 4px; font-size: 12px; }
+      #ed-tabs button.active { background: #4a9eff; border-color: #4a9eff; }
+      #ed-grids { overflow-y: auto; }
+      .ed-grid { display: grid; grid-template-columns: repeat(auto-fill, 40px); gap: 4px;
+        align-content: start; }
+      .ed-grid[hidden] { display: none; }
+      .ed-grid .ed-sect { grid-column: 1 / -1; font-size: 11px; text-transform: uppercase;
+        letter-spacing: 1px; color: #aaaacc; margin-top: 4px; }
+      .ed-grid button.opt { width: 40px; height: 40px; padding: 0; image-rendering: pixelated;
+        background-repeat: no-repeat; background-position: center;
+        background-color: #1a1a2e; border: 1px solid #44446a; border-radius: 6px; cursor: pointer; }
+      .ed-grid button.opt.sel { border-color: #4a9eff; outline: 2px solid #4a9eff; }
+      .ed-grid button.opt.text { width: auto; grid-column: span 2; font-size: 12px; padding: 0 8px;
+        height: 40px; image-rendering: auto; }
     </style>
   </head>
   <body>
@@ -122,103 +156,55 @@
       <div id="menu-mine"></div>
       <div id="menu-sect">En este dispositivo</div>
       <div id="menu-list"></div>
-      <div id="menu-empty" style="display: none">Sin niveles guardados — creá uno.</div>
+      <div id="menu-empty" style="display: none">Sin niveles en este dispositivo — creá uno con "Nuevo nivel".</div>
       <button type="button" id="menu-new" class="primary">Nuevo nivel</button>
     </div>
     <nav id="editor-ui" aria-label="Editor de niveles">
-      <button type="button" id="ed-collapse" title="Mostrar/ocultar panel">☰ Editor</button>
-      <div id="ed-panel">
-      <div class="row">
+      <div id="ed-rotate" title="Ocultar">📱 Giralo a horizontal para editar mejor (tocá para ocultar)</div>
+      <div id="ed-topbar">
+        <button type="button" id="ed-collapse" title="Mostrar/ocultar panel">☰</button>
         <input type="text" id="ed-name" maxlength="60" placeholder="Nombre del nivel" aria-label="Nombre del nivel" />
-      </div>
-      <div class="row">
         <select id="ed-open" aria-label="Abrir nivel guardado"></select>
-      </div>
-      <div class="row">
-        <button type="button" id="ed-new">Nuevo</button>
-        <button type="button" id="ed-delete">Borrar</button>
-      </div>
-      <div class="grp">
-        <label>Piso</label>
-        <div class="line">
-          <button type="button" data-tool="ground">Pintar</button>
-          <button type="button" id="ed-tile-btn" title="Variante de piso"></button>
-        </div>
-        <div id="ed-tile-grid" hidden></div>
-      </div>
-      <div class="grp">
-        <label>Personaje</label>
-        <div class="line">
-          <button type="button" data-tool="player_start">Inicio</button>
-          <select id="ed-player" aria-label="Personaje"></select>
+        <button type="button" id="ed-test" class="primary">Probar</button>
+        <button type="button" id="ed-save">Guardar</button>
+        <button type="button" id="ed-publish">Publicar</button>
+        <div id="ed-more-wrap">
+          <button type="button" id="ed-more" title="Más acciones">⋯</button>
+          <div id="ed-more-menu" hidden>
+            <button type="button" id="ed-new">Nuevo</button>
+            <button type="button" id="ed-export">Exportar</button>
+            <button type="button" id="ed-import">Importar</button>
+            <button type="button" id="ed-delete">Borrar nivel</button>
+            <button type="button" id="ed-exit">Menú</button>
+          </div>
         </div>
       </div>
-      <div class="grp">
-        <label>Enemigo</label>
-        <div class="line">
-          <button type="button" data-tool="enemy">Poner</button>
-          <select id="ed-enemy" aria-label="Tipo de enemigo"></select>
-        </div>
+      <div id="ed-panel">
+      <div id="ed-tabs" role="tablist">
+        <button type="button" data-edtab="piso" class="active">Piso</button>
+        <button type="button" data-edtab="personaje">Pers.</button>
+        <button type="button" data-edtab="enemigos">Enem.</button>
+        <button type="button" data-edtab="frutas">Fruta</button>
+        <button type="button" data-edtab="gemas">Gema</button>
+        <button type="button" data-edtab="obstaculos">Obst.</button>
+        <button type="button" data-edtab="otros">Otros</button>
       </div>
-      <div class="grp">
-        <label>Fruta (cura)</label>
-        <div class="line">
-          <button type="button" data-tool="fruit">Poner</button>
-          <select id="ed-fruit" aria-label="Fruta"></select>
-        </div>
-      </div>
-      <div class="grp">
-        <label>Gema (abre salida)</label>
-        <div class="line">
-          <button type="button" data-tool="gem">Poner</button>
-          <select id="ed-gem" aria-label="Gema"></select>
-        </div>
-      </div>
-      <div class="grp">
-        <label>Otros</label>
-        <div class="line">
-          <button type="button" data-tool="item">Item</button>
-          <button type="button" data-tool="checkpoint">Check</button>
-        </div>
-        <div class="line">
-          <button type="button" data-tool="platform">Plataf.</button>
-          <select id="ed-platform" aria-label="Plataforma">
-            <option value="x">Móvil</option>
-            <option value="fall">Se cae</option>
-          </select>
-        </div>
-        <div class="line">
-          <button type="button" data-tool="deco">Deco</button>
-          <select id="ed-deco" aria-label="Decoración"></select>
-        </div>
-        <div class="line">
-          <button type="button" data-tool="exit">Salida</button>
-          <button type="button" data-tool="erase">Borrar</button>
-        </div>
-      </div>
-      <div class="grp">
-        <label>Obstáculo</label>
-        <div class="line">
-          <button type="button" data-tool="spikes">Poner</button>
-          <select id="ed-obstacle" aria-label="Tipo de obstáculo"></select>
-        </div>
+      <div id="ed-grids">
+        <div class="ed-grid" data-edgrid="piso"></div>
+        <div class="ed-grid" data-edgrid="personaje" hidden></div>
+        <div class="ed-grid" data-edgrid="enemigos" hidden></div>
+        <div class="ed-grid" data-edgrid="frutas" hidden></div>
+        <div class="ed-grid" data-edgrid="gemas" hidden></div>
+        <div class="ed-grid" data-edgrid="obstaculos" hidden></div>
+        <div class="ed-grid" data-edgrid="otros" hidden></div>
       </div>
       <div class="row">
         <button type="button" id="ed-validate">Validar</button>
-        <button type="button" id="ed-save">Guardar</button>
-        <button type="button" id="ed-publish">Publicar</button>
       </div>
-      <div class="row">
-        <button type="button" id="ed-export">Exportar</button>
-        <button type="button" id="ed-import">Importar</button>
       </div>
-      <div class="row">
-        <button type="button" id="ed-test">Probar</button>
-        <button type="button" id="ed-exit">Menú</button>
-      </div>
-      <div class="row">
+      <div id="ed-statusbar">
         <span id="ed-status"></span>
-      </div>
+        <span id="ed-coords"></span>
       </div>
     </nav>
     <button type="button" id="game-back">← Editor</button>
