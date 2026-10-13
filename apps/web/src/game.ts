@@ -51,6 +51,17 @@ interface Floater {
   phase: number;
 }
 
+/** Animación manual para sprites estáticos (frame por tiempo). */
+interface LoopAnim {
+  img: Phaser.Physics.Arcade.Image;
+  tex: string;
+  frames: number;
+  rate: number;
+  t: number;
+  loop: boolean;
+  onDone?: () => void;
+}
+
 interface Mover {
   spr: Phaser.Physics.Arcade.Sprite;
   homeX: number;
@@ -101,9 +112,10 @@ export class GameScene extends Phaser.Scene {
   private walkers: Walker[] = [];
   private flyers: Flyer[] = [];
   private floaters: Floater[] = [];
+  private loops: LoopAnim[] = [];
   private movers: Mover[] = [];
   private fallers: Faller[] = [];
-  private checkpoints: Phaser.Physics.Arcade.Sprite[] = [];
+  private checkpoints: Phaser.Physics.Arcade.Image[] = [];
   private exitZone: { spr: Phaser.GameObjects.Sprite; open: boolean; x: number; y: number } | null = null;
   private hudGems!: Phaser.GameObjects.Text;
   private hudHp!: Phaser.GameObjects.Text;
@@ -174,6 +186,7 @@ export class GameScene extends Phaser.Scene {
     this.walkers = [];
     this.flyers = [];
     this.floaters = [];
+    this.loops = [];
     this.movers = [];
     this.fallers = [];
     this.checkpoints = [];
@@ -209,9 +222,12 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, worldW, this.killY + 200);
 
     // --- Entidades ---
+    // items/spikes/hazards/checkpoints: todo estático (los animados llevan
+    // frames manuales en update; nada con gravedad salvo player/walkers).
     const items = this.physics.add.staticGroup();
     const spikes = this.physics.add.staticGroup();
-    const hazards = this.physics.add.group();
+    const hazards = this.physics.add.staticGroup();
+    const checkpoints = this.physics.add.staticGroup();
     const start = level.entities.find((e) => e.kind === 'player_start');
     const playerSkinId = (start?.props as { skin?: string } | undefined)?.skin;
     this.playerSkin = skinOf(CHAR_SKINS, playerSkinId, 'pink');
@@ -306,12 +322,9 @@ export class GameScene extends Phaser.Scene {
           break;
         }
         case 'checkpoint': {
-          const spr = this.physics.add.sprite(cx, (e.y + 1) * T, CHECKPOINT.off.key);
+          const spr = checkpoints.create(cx, (e.y + 1) * T, CHECKPOINT.off.key) as Phaser.Physics.Arcade.Image;
           spr.setOrigin(0.5, 1);
-          const b = spr.body as Phaser.Physics.Arcade.Body;
-          b.setAllowGravity(false);
-          b.setImmovable(true);
-          b.setSize(24, 60);
+          spr.refreshBody();
           spr.setData('active', false);
           this.checkpoints.push(spr);
           break;
@@ -435,7 +448,7 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
-  /** Obstáculo en (x,y): pinchos estáticos o variante animada con daño. */
+  /** Obstáculo en (x,y): estático siempre; los animados con frames manuales. */
   private addHazard(
     hazards: Phaser.GameObjects.Group,
     spikes: Phaser.GameObjects.Group,
@@ -451,27 +464,38 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (variant === 'trampoline') {
-      const spr = this.physics.add.sprite(x, y + 2, TRAMP_IDLE.key);
-      const b = spr.body as Phaser.Physics.Arcade.Body;
-      b.setAllowGravity(false);
-      b.setImmovable(true);
-      b.setSize(24, 12);
+      const spr = hazards.create(x, y + 2, TRAMP_IDLE.key) as Phaser.Physics.Arcade.Image;
+      spr.refreshBody();
+      (spr.body as Phaser.Physics.Arcade.Body).setSize(24, 12);
       spr.setData('trampoline', true);
       spr.setData('cd', 0);
-      hazards.add(spr);
       return;
     }
     const def = OBSTACLES.find((o) => o.id === variant) ?? OBSTACLES[0];
     const key = def.tex ? def.tex.key : def.image!.key;
-    const spr = this.physics.add.sprite(x, y, key, 0);
-    const b = spr.body as Phaser.Physics.Arcade.Body;
-    b.setAllowGravity(false);
-    b.setImmovable(true);
-    b.setSize(def.bw, def.bh);
-    if (def.id === 'saw') spr.play('saw-spin');
-    else if (def.id === 'fire') spr.play('fire-burn');
-    else if (def.id === 'arrow') spr.play('arrow-spin');
-    hazards.add(spr);
+    const spr = hazards.create(x, y, key, 0) as Phaser.Physics.Arcade.Image;
+    spr.refreshBody();
+    (spr.body as Phaser.Physics.Arcade.Body).setSize(def.bw, def.bh);
+    if (def.tex) this.addLoop(spr, def.tex.key, def.tex.frames, def.id === 'arrow' ? 6 : 12);
+  }
+
+  /** Anima en loop un sprite estático. */
+  private addLoop(img: Phaser.Physics.Arcade.Image, tex: string, frames: number, rate: number): void {
+    img.setTexture(tex, 0);
+    this.loops.push({ img, tex, frames, rate, t: Math.random(), loop: true });
+  }
+
+  /** Anima una vez y al terminar restaura (o llama onDone). */
+  private playOnce(
+    img: Phaser.Physics.Arcade.Image,
+    tex: string,
+    frames: number,
+    rate: number,
+    onDone?: () => void,
+  ): void {
+    this.loops = this.loops.filter((l) => l.img !== img);
+    img.setTexture(tex, 0);
+    this.loops.push({ img, tex, frames, rate, t: 0, loop: false, onDone });
   }
 
   private bounce(go: Phaser.GameObjects.GameObject): void {
@@ -479,25 +503,29 @@ export class GameScene extends Phaser.Scene {
     const last = (go.getData?.('cd') as number | undefined) ?? 0;
     if (now - last < 300) return;
     go.setData?.('cd', now);
-    const spr = go as Phaser.Physics.Arcade.Sprite;
-    spr.play('tramp-bounce');
+    const spr = go as Phaser.Physics.Arcade.Image;
+    const tramp = OBSTACLES.find((o) => o.id === 'trampoline')!;
+    this.playOnce(spr, tramp.tex!.key, tramp.tex!.frames, 16, () => {
+      if (spr.active) spr.setTexture(TRAMP_IDLE.key);
+    });
     this.player.setVelocityY(-460);
     this.buffer = 0;
     this.djUsed = false;
     this.showMsg('¡Boing!');
   }
 
-  private activateCheckpoint(c: Phaser.Physics.Arcade.Sprite): void {
+  private activateCheckpoint(c: Phaser.Physics.Arcade.Image): void {
     if (c.getData('active') === true) return;
     for (const other of this.checkpoints) {
       if (other !== c && other.getData('active') === true) {
         other.setData('active', false);
+        this.loops = this.loops.filter((l) => l.img !== other);
         other.setTexture(CHECKPOINT.off.key);
       }
     }
     c.setData('active', true);
     c.setTexture(CHECKPOINT.on.key, 0);
-    c.play('checkpoint-flag');
+    this.addLoop(c, CHECKPOINT.on.key, CHECKPOINT.on.frames, 12);
     const tileX = Math.floor(c.x / T);
     const tileY = Math.floor(c.y / T);
     const p = this.snapToGround(tileX, tileY);
@@ -519,11 +547,6 @@ export class GameScene extends Phaser.Scene {
       ensure(`${c.id}-fall`, c.fall.key, 0, 1, -1);
     }
     for (const e of ENEMIES) ensure(`foe-${e.id}`, e.tex.key, e.tex.frames - 1, 10);
-    ensure('saw-spin', 'saw', 7, 12);
-    ensure('fire-burn', 'fire', 2, 8);
-    ensure('arrow-spin', 'arrow', 9, 6);
-    ensure('tramp-bounce', 'tramp-jump', 7, 16, 0);
-    ensure('checkpoint-flag', CHECKPOINT.on.key, 25, 12, 0);
     ensure('end-open', EXIT_DOOR.pressed.key, 7, 8, 0);
   }
 
@@ -748,6 +771,30 @@ export class GameScene extends Phaser.Scene {
       const img = fl.img as Phaser.GameObjects.Image;
       if (!img.active) continue;
       img.y = fl.baseY + Math.sin(this.time.now / 1000 + fl.phase) * FEEL.itemFloatAmp;
+    }
+
+    // Animaciones manuales (sprites estáticos: trampas, checkpoint).
+    if (this.loops.length > 0) {
+      const keep: LoopAnim[] = [];
+      for (const l of this.loops) {
+        if (!l.img.active) continue;
+        l.t += delta;
+        const idx = Math.floor(l.t * l.rate);
+        if (idx >= l.frames) {
+          if (l.loop) {
+            l.t -= Math.floor(l.t * l.rate) / l.rate;
+            l.img.setFrame(0);
+            keep.push(l);
+          } else {
+            l.img.setFrame(l.frames - 1);
+            l.onDone?.();
+          }
+          continue;
+        }
+        l.img.setFrame(idx);
+        keep.push(l);
+      }
+      this.loops = keep;
     }
 
     // Invulnerabilidad: parpadeo.
