@@ -77,15 +77,16 @@
         border: 1px solid #55557a; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
       body.playing #game-back { display: block; }
       #menu-ui { display: none; }
-      body.menu #game-frame { display: block; position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
+      body.menu #stage { width: min(1100px, 100vw); }
+      body.menu #game-frame { position: relative; width: 100%; }
       body.menu { background: #141428; }
       #home { display: none; }
-      body.menu #home { display: flex; position: fixed; inset: 0; z-index: 1;
-        flex-direction: column; align-items: center; justify-content: space-between;
-        padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
-        box-sizing: border-box; font-family: system-ui, sans-serif; }
-      #home-logo { color: #fff; font-size: clamp(34px, 7vh, 54px); font-weight: 900;
-        letter-spacing: 1px; text-shadow: 0 3px 0 #0f0f22, 0 6px 18px rgba(0,0,0,0.5); }
+      body.menu #home { display: flex; flex-direction: column; align-items: center;
+        padding: 20px 16px 8px; box-sizing: border-box; font-family: system-ui, sans-serif; }
+      #home-logo { color: #fff; font-size: clamp(30px, 5vw, 46px); font-weight: 900;
+        letter-spacing: 1px; text-shadow: 0 3px 0 #0f0f22, 0 6px 18px rgba(0,0,0,0.5); margin-bottom: 12px; }
+      #home-center { display: flex; gap: clamp(12px, 4vw, 36px); align-items: center; justify-content: center;
+        margin: 18px 0 10px; flex-wrap: wrap; }
       #home-center { display: flex; gap: clamp(12px, 4vw, 36px); align-items: center; justify-content: center; }
       #home .hbtn { display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: 6px; border-radius: 20px; border: 2px solid #55557a; background: #23233d; color: #fff;
@@ -134,6 +135,14 @@
       #modal-content .tabs button.active { background: #4a9eff; border-color: #4a9eff; }
       #modal-content .err { color: #ff8888; font-size: 13px; min-height: 18px; }
       #modal-content .row { display: flex; gap: 8px; align-items: center; }
+      #modal-content .lvl-list { display: flex; flex-direction: column; gap: 8px; }
+      #modal-content .lvl-row { display: flex; gap: 6px; align-items: center; background: #23233d;
+        border: 1px solid #44446a; border-radius: 8px; padding: 8px 10px; flex-wrap: wrap; }
+      #modal-content .lvl-row .nm { flex: 1; min-width: 100px; overflow: hidden;
+        text-overflow: ellipsis; white-space: nowrap; }
+      #modal-content .lvl-row .pin { color: #7de0a8; font-size: 12px; font-weight: 700; }
+      #modal-content .lvl-row button { min-height: 40px; padding: 6px 10px; border-radius: 8px;
+        border: 1px solid #55557a; background: #33334d; color: #fff; cursor: pointer; font-size: 13px; }
       #menu-ui #menu-list { display: flex; flex-direction: column; gap: 8px; }
       #menu-ui #menu-mine { display: flex; flex-direction: column; gap: 8px; }
       #menu-ui #menu-sect { color: #aaaacc; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-top: 6px; }
@@ -218,26 +227,11 @@
         ></ins>
       </div>
     </div>
-    <div id="menu-ui" aria-label="Niveles guardados">
-      <div id="menu-auth"></div>
-      <div id="menu-pinrow">
-        <input type="text" id="menu-pin" maxlength="9" placeholder="PIN XXXX-XXXX" aria-label="PIN de nivel" />
-        <button type="button" id="menu-pin-go">Buscar</button>
-        <span id="menu-pin-err"></span>
-      </div>
-      <div id="menu-sect">Mis niveles (servidor)</div>
-      <div id="menu-mine"></div>
-      <div id="menu-sect">En este dispositivo</div>
-      <div id="menu-list"></div>
-      <div id="menu-empty" style="display: none">Sin niveles en este dispositivo — creá uno con "Nuevo nivel".</div>
-      <button type="button" id="menu-new" class="primary">Nuevo nivel</button>
-    </div>
     <nav id="editor-ui" aria-label="Editor de niveles">
       <div id="ed-rotate" title="Ocultar">📱 Giralo a horizontal para editar mejor (tocá para ocultar)</div>
       <div id="ed-topbar">
         <button type="button" id="ed-collapse" title="Mostrar/ocultar panel">☰</button>
         <input type="text" id="ed-name" maxlength="60" placeholder="Nombre del nivel" aria-label="Nombre del nivel" />
-        <select id="ed-open" aria-label="Abrir nivel guardado"></select>
         <button type="button" id="ed-test" class="primary">Probar</button>
         <button type="button" id="ed-save">Guardar</button>
         <button type="button" id="ed-publish">Publicar</button>

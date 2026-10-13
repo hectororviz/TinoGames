@@ -21,15 +21,9 @@ import {
 import {
   blankLevel,
   cloneLevel,
-  createLevel,
-  deleteLevel,
-  findLevel,
-  listLevels,
-  setRemote,
-  updateLevel,
 } from './levels.js';
 import type { EditorData } from './levels.js';
-import { getToken, publishLevel, updateRemoteLevel } from './api.js';
+import { getToken, publishLevel, updateRemoteLevel, deleteRemoteLevel } from './api.js';
 
 const T = 16;
 /** Distancia en px de pantalla para distinguir click (pintar) de drag (pan). */
@@ -86,8 +80,9 @@ function fillSelect(sel: HTMLSelectElement, groups: { label?: string; options: {
 
 export class EditorScene extends Phaser.Scene {
   private level!: Level;
-  private openId: string | undefined;
+  private remoteId: string | undefined;
   private pendingName = '';
+  private pendingPin = '';
   private dirty = false;
   private tool: Tool | null = 'ground';
   private tileVariant = 0;
@@ -127,18 +122,14 @@ export class EditorScene extends Phaser.Scene {
     });
     if (data?.draft) {
       this.level = cloneLevel(data.draft);
-      this.openId = data.openId;
+      this.remoteId = data.remoteId;
       this.pendingName = data.name ?? '';
-    } else if (data?.openId) {
-      const entry = findLevel(data.openId);
-      this.level = entry ? cloneLevel(entry.level) : blankLevel();
-      this.openId = entry?.id;
-      this.pendingName = entry?.name ?? '';
     } else {
       this.level = blankLevel();
-      this.openId = undefined;
+      this.remoteId = undefined;
       this.pendingName = '';
     }
+    this.pendingPin = '';
     this.dirty = false;
     this.cameras.main.setBackgroundColor('#1a1a2e');
     this.lastGridKey = '';
@@ -227,76 +218,26 @@ export class EditorScene extends Phaser.Scene {
     }
   }
 
-  private saveLevel(): void {
+  /** Guarda en el servidor (requiere sesión). Devuelve el PIN. */
+  private async saveLevel(): Promise<string> {
+    if (!getToken()) throw new Error('Entrá con tu cuenta para guardar');
     const name = (document.getElementById('ed-name') as HTMLInputElement | null)?.value ?? '';
-    if (this.openId) {
-      const entry = updateLevel(this.openId, name, this.level);
-      this.openId = entry.id;
-      this.pendingName = entry.name;
-    } else {
-      const entry = createLevel(name, this.level);
-      this.openId = entry.id;
-      this.pendingName = entry.name;
-    }
-    this.dirty = false;
+    const clean = name.trim();
+    if (!clean) throw new Error('Poné un nombre al nivel');
+    this.pendingName = clean;
     this.syncNameInput();
-    this.refreshOpenList();
+    const out = this.remoteId
+      ? await updateRemoteLevel(this.remoteId, clean, this.level)
+      : await publishLevel(clean, this.level);
+    this.remoteId = out.id;
+    this.pendingPin = out.pin;
+    this.dirty = false;
+    return out.pin;
   }
 
   private syncNameInput(): void {
     const input = document.getElementById('ed-name') as HTMLInputElement | null;
     if (input) input.value = this.pendingName;
-  }
-
-  private refreshOpenList(): void {
-    const select = document.getElementById('ed-open') as HTMLSelectElement | null;
-    if (!select) return;
-    select.textContent = '';
-    const hint = document.createElement('option');
-    hint.value = '';
-    hint.textContent = 'Abrir…';
-    select.appendChild(hint);
-    for (const e of listLevels()) {
-      const opt = document.createElement('option');
-      opt.value = e.id;
-      opt.textContent = e.name;
-      if (e.id === this.openId) opt.selected = true;
-      select.appendChild(opt);
-    }
-    if (!this.openId) select.value = '';
-  }
-
-  private openEntry(id: string): void {
-    if (!id) return;
-    if (!this.confirmDiscard()) return;
-    const entry = findLevel(id);
-    if (!entry) return;
-    this.pushHistory();
-    this.openId = entry.id;
-    this.pendingName = entry.name;
-    this.level = cloneLevel(entry.level);
-    this.dirty = false;
-    this.lastPaintKey = '';
-    this.centerCamera();
-    this.renderLevel();
-    this.syncNameInput();
-    this.refreshOpenList();
-    this.updateStatus();
-  }
-
-  private newDraft(): void {
-    if (!this.confirmDiscard()) return;
-    this.pushHistory();
-    this.openId = undefined;
-    this.pendingName = '';
-    this.level = blankLevel();
-    this.dirty = false;
-    this.lastPaintKey = '';
-    this.centerCamera();
-    this.renderLevel();
-    this.syncNameInput();
-    this.refreshOpenList();
-    this.updateStatus();
   }
 
   private confirmDiscard(): boolean {
@@ -506,23 +447,10 @@ export class EditorScene extends Phaser.Scene {
     };
     el('ed-validate').onclick = () => this.updateStatus();
     el('ed-save').onclick = () => {
-      try {
-        this.saveLevel();
-      } catch (err) {
-        this.flashStatus(err instanceof Error ? err.message : 'No se pudo guardar', false);
-        return;
-      }
-      // Validar automáticamente al guardar: si hay errores se muestran,
-      // si está válido se confirma el guardado.
-      const errors = validateLevel(this.level);
-      if (errors.length === 0) {
-        this.flashStatus(`Nivel "${this.pendingName}" guardado`, true);
-      } else {
-        this.updateStatus();
-      }
+      void this.saveFlow(false);
     };
     el('ed-publish').onclick = () => {
-      void this.publishLevel();
+      void this.saveFlow(true);
     };
     el('ed-export').onclick = () => this.exportLevel();
     el('ed-import').onclick = () => this.importLevel();
@@ -533,24 +461,41 @@ export class EditorScene extends Phaser.Scene {
     };
     const openSelect = document.getElementById('ed-open') as HTMLSelectElement | null;
     if (openSelect) {
-      openSelect.onchange = () => {
-        this.openEntry(openSelect.value);
-        openSelect.blur();
-      };
+      openSelect.remove();
     }
     el('ed-new').onclick = () => this.newDraft();
     el('ed-delete').onclick = () => {
-      if (!this.openId) {
-        this.flashStatus('Nada que borrar: abrí un nivel guardado', false);
+      if (!this.remoteId) {
+        this.flashStatus('Nada que borrar: abrí un nivel de Mis niveles', false);
         return;
       }
-      if (!confirm(`¿Borrar "${this.pendingName}"?`)) return;
-      deleteLevel(this.openId);
-      this.newDraft();
-      this.flashStatus('Nivel borrado', true);
+      if (!confirm(`¿Borrar "${this.pendingName}" del servidor?`)) return;
+      deleteRemoteLevel(this.remoteId).then(
+        () => {
+          this.newDraft();
+          this.flashStatus('Nivel borrado', true);
+        },
+        (err) => {
+          this.flashStatus(err instanceof Error ? err.message : 'No se pudo borrar', false);
+        },
+      );
     };
     this.syncNameInput();
-    this.refreshOpenList();
+  }
+
+  private newDraft(): void {
+    if (!this.confirmDiscard()) return;
+    this.pushHistory();
+    this.remoteId = undefined;
+    this.pendingName = '';
+    this.pendingPin = '';
+    this.level = blankLevel();
+    this.dirty = false;
+    this.lastPaintKey = '';
+    this.centerCamera();
+    this.renderLevel();
+    this.syncNameInput();
+    this.updateStatus();
   }
 
   private buildTabs(): void {
@@ -790,32 +735,18 @@ export class EditorScene extends Phaser.Scene {
     this.time.delayedCall(2000, () => this.updateStatus());
   }
 
-  private async publishLevel(): Promise<void> {
+  /** Guardar en el servidor (con validación). showPin muestra el PIN. */
+  private async saveFlow(showPin: boolean): Promise<void> {
     const errors = validateLevel(this.level);
     if (errors.length > 0) {
-      this.flashStatus('Corrige los errores antes de publicar', false);
-      return;
-    }
-    if (!getToken()) {
-      this.flashStatus('Entrá con tu cuenta desde el menú para publicar', false);
+      this.flashStatus('Corrige los errores antes de guardar', false);
       return;
     }
     try {
-      this.saveLevel();
+      const pin = await this.saveLevel();
+      this.flashStatus(showPin ? `Publicado · PIN ${pin}` : `Nivel "${this.pendingName}" guardado`, true);
     } catch (err) {
       this.flashStatus(err instanceof Error ? err.message : 'No se pudo guardar', false);
-      return;
-    }
-    const entry = findLevel(this.openId ?? '');
-    if (!entry) return;
-    try {
-      const out = entry.remoteId
-        ? await updateRemoteLevel(entry.remoteId, entry.name, entry.level)
-        : await publishLevel(entry.name, entry.level);
-      setRemote(entry.id, out.id, out.pin);
-      this.flashStatus(`Publicado · PIN ${out.pin}`, true);
-    } catch (err) {
-      this.flashStatus(err instanceof Error ? err.message : 'No se pudo publicar', false);
     }
   }
 
@@ -869,7 +800,7 @@ export class EditorScene extends Phaser.Scene {
     this.scene.start('game', {
       level: cloneLevel(this.level),
       fromEditor: true,
-      openId: this.openId,
+      remoteId: this.remoteId,
       name: (document.getElementById('ed-name') as HTMLInputElement | null)?.value ?? this.pendingName,
     });
   }

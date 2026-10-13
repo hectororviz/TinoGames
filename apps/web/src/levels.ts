@@ -11,7 +11,7 @@ export interface SavedLevel {
 }
 
 export interface EditorData {
-  openId?: string;
+  remoteId?: string;
   draft?: Level;
   name?: string;
 }
