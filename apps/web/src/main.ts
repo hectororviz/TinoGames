@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { FEEL } from './feel.js';
 import { GameScene } from './game.js';
+import { MenuScene } from './menu.js';
+import { EditorScene } from './editor.js';
 
 new Phaser.Game({
   type: Phaser.AUTO,
@@ -17,5 +19,5 @@ new Phaser.Game({
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [GameScene],
+  scene: [MenuScene, GameScene, EditorScene],
 });

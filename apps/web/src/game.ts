@@ -7,6 +7,8 @@ import { bindTouch, touchState } from './input.js';
 import pinkUrl from '../../../assets/pink.png?url';
 import appleUrl from '../../../assets/Apple.png?url';
 import strawberryUrl from '../../../assets/Strawberry.png?url';
+import tilesPaUrl from '../../../assets/tiles_pa.png?url';
+import vendorSpikeUrl from '../../../assets/vendor_pa_spike.png?url';
 
 const T = FEEL.tile;
 
@@ -66,10 +68,12 @@ export class GameScene extends Phaser.Scene {
     this.load.spritesheet('pink', pinkUrl, { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('apple', appleUrl, { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('strawberry', strawberryUrl, { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('tile', tilesPaUrl, { frameWidth: 16, frameHeight: 16 });
+    this.load.image('spike', vendorSpikeUrl);
   }
 
-  create(): void {
-    const level = sampleLevel as Level;
+  create(data?: { level?: Level }): void {
+    const level = data?.level ?? sampleLevel as Level;
     assertValidLevel(level);
     this.walkers = [];
     this.flyers = [];
@@ -88,7 +92,7 @@ export class GameScene extends Phaser.Scene {
       maxX = Math.max(maxX, t.x);
       maxY = Math.max(maxY, t.y);
       if (t.t === 'ground') {
-        const img = solids.create(t.x * T + T / 2, t.y * T + T / 2, 'tile') as Phaser.Physics.Arcade.Image;
+        const img = solids.create(t.x * T + T / 2, t.y * T + T / 2, 'tile', 0) as Phaser.Physics.Arcade.Image;
         img.refreshBody();
         img.setDepth(-5);
         img.setData('key', tileKey('tile', t.x, t.y));
@@ -221,31 +225,26 @@ export class GameScene extends Phaser.Scene {
   }
 
   private makeTextures(): void {
-    if (!this.textures.exists('tile')) {
+    if (!this.textures.exists('walker')) {
       const g = this.add.graphics();
-      g.fillStyle(0x4a3b2a, 1).fillRect(0, 0, T, T);
-      g.fillStyle(0x6b543a, 1).fillRect(0, 0, T, 4);
-      g.generateTexture('tile', T, T);
+      g.fillStyle(0xcc3333, 1).fillRect(0, 0, 28, 28);
+      g.fillStyle(0xffffff, 1).fillCircle(8, 10, 4);
+      g.fillStyle(0xffffff, 1).fillCircle(20, 10, 4);
+      g.fillStyle(0x000000, 1).fillCircle(9, 11, 2);
+      g.fillStyle(0x000000, 1).fillCircle(21, 11, 2);
+      g.generateTexture('walker', 28, 28);
       g.clear();
-      g.fillStyle(0xcc2222, 1);
-      for (let i = 0; i < 4; i++) {
-        g.fillTriangle(i * 4, T, i * 4 + 2, 6, i * 4 + 4, T);
-      }
-      g.generateTexture('spike', T, T);
-      g.clear();
-      g.fillStyle(0xcc3333, 1).fillRect(2, 2, 28, 28);
-      g.generateTexture('walker', 32, 32);
-      g.clear();
-      g.fillStyle(0x3388ff, 1).fillCircle(16, 16, 14);
+      g.fillStyle(0x3388ff, 1).fillCircle(16, 16, 12);
+      g.fillStyle(0xffffff, 1).fillCircle(16, 16, 6);
       g.generateTexture('flyer', 32, 32);
       g.clear();
-      g.fillStyle(0x555566, 1).fillRect(0, 0, T, T * 2);
-      g.fillStyle(0x888899, 1).fillRect(0, 0, T, 4);
-      g.generateTexture('exit-locked', T, T * 2);
+      g.fillStyle(0x555566, 1).fillRect(0, 0, 16, 32);
+      g.fillStyle(0x888899, 1).fillRect(0, 0, 16, 4);
+      g.generateTexture('exit-locked', 16, 32);
       g.clear();
-      g.fillStyle(0xc084fc, 1).fillRect(0, 0, T, T * 2);
-      g.fillStyle(0xe9d5ff, 1).fillRect(0, 0, T, 4);
-      g.generateTexture('exit-open', T, T * 2);
+      g.fillStyle(0xc084fc, 1).fillRect(0, 0, 16, 32);
+      g.fillStyle(0xe9d5ff, 1).fillRect(0, 0, 16, 4);
+      g.generateTexture('exit-open', 16, 32);
       g.destroy();
     }
   }
