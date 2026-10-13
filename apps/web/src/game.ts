@@ -129,10 +129,14 @@ export class GameScene extends Phaser.Scene {
       const cx = e.x * T + T / 2;
       const cy = e.y * T + T / 2;
       switch (e.kind) {
-        case 'player_start':
+        case 'player_start': {
           this.startX = cx;
-          this.startY = cy;
+          // El body mide 18x28 (mitad 14px): spawnear al centro del tile deja
+          // los pies 6px dentro del piso. Se apoya 1px arriba del solido.
+          const floorBelow = level.tiles.some((t) => t.t === 'ground' && t.x === e.x && t.y === e.y + 1);
+          this.startY = floorBelow ? (e.y + 1) * T - 15 : cy;
           break;
+        }
         case 'item': {
           const tex = itemIdx % 2 === 0 ? 'apple' : 'strawberry';
           itemIdx++;

@@ -20,6 +20,31 @@ describe('validateLevel', () => {
     expect(codes).toContain('player-start');
   });
 
+  it('accepts player_start up to 3 tiles above ground', () => {
+    const level = loadSample();
+    const start = level.entities.find((e) => e.kind === 'player_start')!;
+    // Subir el piso 1..3 debajo sigue valido (cae al probar).
+    start.y -= 1;
+    expect(validateLevel(level).filter((e) => e.code === 'needs-ground')).toEqual([]);
+  });
+
+  it('rejects player_start floating with no ground near', () => {
+    const level = loadSample();
+    const start = level.entities.find((e) => e.kind === 'player_start')!;
+    start.y = 0;
+    const codes = validateLevel(level).map((e) => e.code);
+    expect(codes).toContain('needs-ground');
+  });
+
+  it('rejects player_start inside solid', () => {
+    const level = loadSample();
+    const start = level.entities.find((e) => e.kind === 'player_start')!;
+    const ground = level.tiles.find((t) => t.t === 'ground')!;
+    start.x = ground.x;
+    start.y = ground.y;
+    const codes = validateLevel(level).map((e) => e.code);
+    expect(codes).toContain('inside-solid');
+  });
   it('rejects a walker floating in the air', () => {
     const level = loadSample();
     const walker = level.entities.find((e) => e.kind === 'walker');

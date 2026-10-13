@@ -16,8 +16,10 @@ function solidAt(solids: Set<string>, x: number, y: number): boolean {
 /**
  * Valida un nivel v2. Reglas:
  * - 1 player_start y 1 exit.
- * - player_start / walker / exit con tile solido (ground) justo debajo.
- * - flyer / item en el aire (la celda y la de abajo no son solidas).
+ * - player_start con solido debajo en los proximos 3 tiles (permite pintar
+ *   1 tile arriba del piso y caer al probar, sin quedar embebido).
+ * - walker / exit con tile solido (ground) justo debajo.
+ * - flyer / item en el aire (la celda no es solida).
  * - spikes como tramo (piso) o columna (pared): al menos una dimension >= 1
  *   y apoyado en solido o adosado a solido lateral.
  */
@@ -60,7 +62,23 @@ export function validateLevel(level: Level): ValidationError[] {
       continue;
     }
     switch (e.kind) {
-      case 'player_start':
+      case 'player_start': {
+        if (solidAt(solids, e.x, e.y)) {
+          fail('inside-solid', `player_start at (${e.x},${e.y}) is inside solid`);
+          break;
+        }
+        let supported = false;
+        for (let d = 1; d <= 3; d++) {
+          if (solidAt(solids, e.x, e.y + d)) {
+            supported = true;
+            break;
+          }
+        }
+        if (!supported) {
+          fail('needs-ground', `player_start at (${e.x},${e.y}) needs ground within 3 below`);
+        }
+        break;
+      }
       case 'walker':
       case 'exit':
         if (!solidAt(solids, e.x, e.y + 1)) {
