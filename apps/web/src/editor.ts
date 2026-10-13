@@ -18,10 +18,8 @@ import {
   TRAMP_IDLE,
   type SheetDef,
 } from './catalog.js';
-import {
-  blankLevel,
-  cloneLevel,
-} from './levels.js';
+import { blankLevel, cloneLevel } from './levels.js';
+import { PISO_GROUPS } from './piso-groups.js';
 import type { EditorData } from './levels.js';
 import { getToken, publishLevel, updateRemoteLevel, deleteRemoteLevel } from './api.js';
 
@@ -44,38 +42,15 @@ type Tool =
   | 'spikes'
   | 'deco'
   | 'exit'
-  | 'erase';
+  | 'erase'
+  | 'hand';
+
+type RailCat = 'piso' | 'personaje' | 'enemigos' | 'frutas' | 'gemas' | 'obstaculos' | 'otros';
 
 function el(id: string): HTMLElement {
   const node = document.getElementById(id);
   if (!node) throw new Error(`missing #${id}`);
   return node;
-}
-
-function selectEl(id: string): HTMLSelectElement {
-  const node = document.getElementById(id);
-  if (!(node instanceof HTMLSelectElement)) throw new Error(`missing select #${id}`);
-  return node;
-}
-
-function fillSelect(sel: HTMLSelectElement, groups: { label?: string; options: { value: string; label: string }[] }[]): void {
-  sel.textContent = '';
-  for (const g of groups) {
-    const parent: HTMLOptGroupElement | HTMLSelectElement = g.label
-      ? (() => {
-          const og = document.createElement('optgroup');
-          og.label = g.label;
-          sel.appendChild(og);
-          return og;
-        })()
-      : sel;
-    for (const o of g.options) {
-      const opt = document.createElement('option');
-      opt.value = o.value;
-      opt.textContent = o.label;
-      parent.appendChild(opt);
-    }
-  }
 }
 
 export class EditorScene extends Phaser.Scene {
@@ -94,6 +69,7 @@ export class EditorScene extends Phaser.Scene {
   private obstacle = 'spikes';
   private decoSkin = 'box1';
   private gridGraphics!: Phaser.GameObjects.Graphics;
+  private guideGraphics!: Phaser.GameObjects.Graphics;
   private ghost!: Phaser.GameObjects.Image;
   private ghostRect!: Phaser.GameObjects.Graphics;
   private sprites: Phaser.GameObjects.GameObject[] = [];
@@ -106,6 +82,8 @@ export class EditorScene extends Phaser.Scene {
   private erasing = false;
   private hoverX = -1;
   private hoverY = -1;
+  private spaceDown = false;
+  private pinchDist = 0;
   private past: Level[] = [];
   private future: Level[] = [];
   private strokeSnapshot: Level | null = null;
@@ -185,6 +163,7 @@ export class EditorScene extends Phaser.Scene {
 
   private setupScene(): void {
     this.gridGraphics = this.add.graphics();
+    this.guideGraphics = this.add.graphics().setDepth(90);
     this.ghost = this.add.image(0, 0, 'tile', 0).setAlpha(0.5).setDepth(100).setVisible(false);
     this.ghostRect = this.add.graphics().setDepth(100).setVisible(false);
     this.centerCamera();
@@ -274,31 +253,9 @@ export class EditorScene extends Phaser.Scene {
     this.restore(next);
   }
 
-  private toolTab(tool: Tool | null): string {
-    switch (tool) {
-      case 'ground': return 'piso';
-      case 'player_start': return 'personaje';
-      case 'enemy': return 'enemigos';
-      case 'fruit': return 'frutas';
-      case 'gem': return 'gemas';
-      case 'spikes': return 'obstaculos';
-      default: return 'otros';
-    }
-  }
-
-  private gotoTab(tab: string): void {
-    document.querySelectorAll<HTMLElement>('#ed-tabs [data-edtab]').forEach((b) => {
-      b.classList.toggle('active', b.getAttribute('data-edtab') === tab);
-    });
-    document.querySelectorAll<HTMLElement>('#ed-grids [data-edgrid]').forEach((g) => {
-      g.hidden = g.getAttribute('data-edgrid') !== tab;
-    });
-  }
-
   private setTool(tool: Tool | null): void {
     this.tool = tool;
-    this.refreshSelection();
-    if (tool) this.gotoTab(this.toolTab(tool));
+    this.refreshRail();
   }
 
   /** Fantasma del objeto actual bajo el cursor. */
@@ -428,12 +385,19 @@ export class EditorScene extends Phaser.Scene {
       sprite.setScale(p.h / p.fh);
       this.sprites.push(sprite);
     }
+
+    // Guía: rectángulo de lo que ve el jugador (480x270) alrededor del inicio.
+    this.guideGraphics.clear();
+    const start = this.level.entities.find((e) => e.kind === 'player_start');
+    if (start) {
+      this.guideGraphics.lineStyle(2, 0xffd23f, 0.6);
+      this.guideGraphics.strokeRect(start.x * T + T / 2 - 240, start.y * T + T / 2 - 135, 480, 270);
+    }
   }
 
   private bindUi(): void {
-    this.buildTabs();
-    this.buildGrids();
-    this.refreshSelection();
+    this.buildRail();
+    this.refreshRail();
 
     el('ed-collapse').onclick = () => {
       document.body.classList.toggle('ed-collapsed');
@@ -498,21 +462,11 @@ export class EditorScene extends Phaser.Scene {
     this.updateStatus();
   }
 
-  private buildTabs(): void {
-    const tabs = document.querySelectorAll<HTMLElement>('#ed-tabs [data-edtab]');
-    tabs.forEach((btn) => {
-      btn.onclick = () => {
-        tabs.forEach((b) => b.classList.toggle('active', b === btn));
-        const tab = btn.getAttribute('data-edtab');
-        document.querySelectorAll<HTMLElement>('#ed-grids [data-edgrid]').forEach((g) => {
-          g.hidden = g.getAttribute('data-edgrid') !== tab;
-        });
-      };
-    });
-  }
+  private openCat: RailCat | null = null;
+  private recents: { label: string; style: Record<string, string>; apply: () => void }[] = [];
 
-  /** Miniatura 40px de un frame de spritesheet (frame 0). */
-  private sheetThumb(url: string, fw: number, fh: number, frames: number, h = 36): Record<string, string> {
+  /** Miniatura 44px de un frame de spritesheet (frame 0). */
+  private sheetThumb(url: string, fw: number, fh: number, frames: number, h = 40): Record<string, string> {
     const k = h / fh;
     return {
       backgroundImage: `url("${url}")`,
@@ -521,12 +475,96 @@ export class EditorScene extends Phaser.Scene {
     };
   }
 
-  private optBtn(
+  private flyout(): HTMLElement {
+    return el('ed-flyout');
+  }
+
+  private closeFlyout(): void {
+    this.flyout().hidden = true;
+    this.openCat = null;
+    document.querySelectorAll<HTMLElement>('#ed-rail [data-edcat]').forEach((b) => {
+      b.classList.remove('open');
+    });
+  }
+
+  private buildRail(): void {
+    document.querySelectorAll<HTMLElement>('#ed-rail [data-edcat]').forEach((btn) => {
+      btn.onclick = (ev) => {
+        ev.stopPropagation();
+        const cat = btn.getAttribute('data-edcat') as RailCat;
+        if (this.openCat === cat && !this.flyout().hidden) {
+          this.closeFlyout();
+          return;
+        }
+        this.openFlyout(cat, btn);
+      };
+    });
+    document.querySelectorAll<HTMLElement>('#ed-rail [data-edtool]').forEach((btn) => {
+      btn.onclick = () => {
+        const t = btn.getAttribute('data-edtool') as Tool;
+        this.closeFlyout();
+        this.setTool(t);
+      };
+    });
+    document.addEventListener('pointerdown', (ev) => {
+      const target = ev.target as HTMLElement | null;
+      if (target && target.closest('#ed-flyout,#ed-rail,#ed-topbar')) return;
+      if (!this.flyout().hidden) this.closeFlyout();
+    });
+  }
+
+  private openFlyout(cat: RailCat, anchor: HTMLElement): void {
+    const fly = this.flyout();
+    fly.textContent = '';
+    this.openCat = cat;
+    document.querySelectorAll<HTMLElement>('#ed-rail [data-edcat]').forEach((b) => {
+      b.classList.toggle('open', b === anchor);
+    });
+    if (cat === 'piso') this.buildPisoFlyout(fly);
+    else if (cat === 'personaje') this.buildPersonajeFlyout(fly);
+    else if (cat === 'enemigos') this.buildEnemigosFlyout(fly);
+    else if (cat === 'frutas') this.buildFrutasFlyout(fly);
+    else if (cat === 'gemas') this.buildGemasFlyout(fly);
+    else if (cat === 'obstaculos') this.buildObstaculosFlyout(fly);
+    else this.buildOtrosFlyout(fly);
+    const r = anchor.getBoundingClientRect();
+    fly.hidden = false;
+    fly.style.left = '140px';
+    fly.style.top = `${Math.max(52, Math.min(r.top, window.innerHeight - 200))}px`;
+    fly.scrollTop = 0;
+  }
+
+  private fgrid(fly: HTMLElement): HTMLElement {
+    const g = document.createElement('div');
+    g.className = 'ed-fgrid';
+    fly.appendChild(g);
+    return g;
+  }
+
+  private fsect(fly: HTMLElement, title: string, open: boolean): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'ed-fsect';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = `${open ? '▾' : '▸'} ${title}`;
+    const grid = document.createElement('div');
+    grid.className = 'ed-fgrid';
+    grid.hidden = !open;
+    btn.onclick = () => {
+      grid.hidden = !grid.hidden;
+      btn.textContent = `${grid.hidden ? '▸' : '▾'} ${title}`;
+    };
+    wrap.appendChild(btn);
+    wrap.appendChild(grid);
+    fly.appendChild(wrap);
+    return grid;
+  }
+
+  private fopt(
     grid: HTMLElement,
     title: string,
     style: Record<string, string>,
-    select: () => void,
-    isSel: () => boolean,
+    apply: () => void,
   ): void {
     const opt = document.createElement('button');
     opt.type = 'button';
@@ -536,160 +574,230 @@ export class EditorScene extends Phaser.Scene {
     opt.style.backgroundSize = style['backgroundSize'];
     opt.style.backgroundPosition = style['backgroundPosition'];
     opt.onclick = () => {
-      select();
-      this.refreshSelection();
-      if (this.tool) this.gotoTab(this.toolTab(this.tool));
+      apply();
+      this.pushRecent(title, style, apply);
+      this.closeFlyout();
+      this.refreshRail();
     };
-    this.optBtns.push({ btn: opt, isSel });
     grid.appendChild(opt);
   }
 
-  private sectLabel(grid: HTMLElement, text: string): void {
-    const s = document.createElement('div');
-    s.className = 'ed-sect';
-    s.textContent = text;
-    grid.appendChild(s);
-  }
-
-  private optBtns: { btn: HTMLButtonElement; isSel: () => boolean }[] = [];
-
-  private gridEl(tab: string): HTMLElement {
-    const grid = document.querySelector<HTMLElement>(`#ed-grids [data-edgrid="${tab}"]`);
-    if (!grid) throw new Error(`missing grid ${tab}`);
-    return grid;
-  }
-
-  private buildGrids(): void {
-    this.optBtns = [];
-    // Piso: 252 variantes.
-    {
-      const grid = this.gridEl('piso');
-      for (let v = 0; v < TILE_VARIANTS; v++) {
+  private buildPisoFlyout(fly: HTMLElement): void {
+    for (const [gi, group] of PISO_GROUPS.entries()) {
+      const grid = this.fsect(fly, `${group.name} (${group.variants.length})`, gi === 0);
+      for (const v of group.variants) {
         const style = this.tileThumb(v);
-        this.optBtn(grid, `Piso ${v}`, style, () => {
+        this.fopt(grid, `Piso ${v}`, style, () => {
           this.tileVariant = v;
           this.tool = 'ground';
-        }, () => this.tool === 'ground' && this.tileVariant === v);
+        });
       }
-    }
-    // Personaje.
-    {
-      const grid = this.gridEl('personaje');
-      for (const c of CHAR_SKINS) {
-        this.optBtn(grid, c.label, this.sheetThumb(c.idle.url, 32, 32, c.idle.frames), () => {
-          this.playerSkin = c.id;
-          this.tool = 'player_start';
-        }, () => this.tool === 'player_start' && this.playerSkin === c.id);
-      }
-    }
-    // Enemigos.
-    {
-      const grid = this.gridEl('enemigos');
-      this.sectLabel(grid, 'Caminantes');
-      for (const e of ENEMIES.filter((x) => x.kind === 'walker')) {
-        this.optBtn(grid, e.label, this.sheetThumb(e.tex.url, e.tex.fw, e.tex.fh, e.tex.frames), () => {
-          this.enemySkin = e.id;
-          this.tool = 'enemy';
-        }, () => this.tool === 'enemy' && this.enemySkin === e.id);
-      }
-      this.sectLabel(grid, 'Voladores');
-      for (const e of ENEMIES.filter((x) => x.kind === 'flyer')) {
-        this.optBtn(grid, e.label, this.sheetThumb(e.tex.url, e.tex.fw, e.tex.fh, e.tex.frames), () => {
-          this.enemySkin = e.id;
-          this.tool = 'enemy';
-        }, () => this.tool === 'enemy' && this.enemySkin === e.id);
-      }
-    }
-    // Frutas.
-    {
-      const grid = this.gridEl('frutas');
-      for (const f of FRUITS) {
-        const sheet = FRUIT_SHEETS.find((s) => s.key === f.key)!;
-        this.optBtn(grid, f.label, this.sheetThumb(sheet.url, 32, 32, sheet.frames), () => {
-          this.fruitSkin = f.id;
-          this.tool = 'fruit';
-        }, () => this.tool === 'fruit' && this.fruitSkin === f.id);
-      }
-    }
-    // Gemas.
-    {
-      const grid = this.gridEl('gemas');
-      for (const g of GEMS) {
-        this.optBtn(grid, g.label, this.sheetThumb(g.url, 32, 32, 1), () => {
-          this.gemColor = g.id;
-          this.tool = 'gem';
-        }, () => this.tool === 'gem' && this.gemColor === g.id);
-      }
-    }
-    // Obstáculos.
-    {
-      const grid = this.gridEl('obstaculos');
-      const dims: Record<string, [string, number, number, number]> = {
-        spikes: [OBSTACLES[0].image!.url, 16, 16, 1],
-        saw: [OBSTACLES[1].tex!.url, 38, 38, 8],
-        fire: [OBSTACLES[2].tex!.url, 16, 32, 3],
-        arrow: [OBSTACLES[3].tex!.url, 18, 18, 10],
-        rock: [OBSTACLES[4].image!.url, 42, 42, 1],
-        spikehead: [OBSTACLES[5].image!.url, 54, 52, 1],
-        trampoline: [TRAMP_IDLE.url, 28, 28, 1],
-      };
-      for (const o of OBSTACLES) {
-        const [url, fw, fh, frames] = dims[o.id]!;
-        this.optBtn(grid, o.label, this.sheetThumb(url, fw, fh, frames), () => {
-          this.obstacle = o.id;
-          this.tool = 'spikes';
-        }, () => this.tool === 'spikes' && this.obstacle === o.id);
-      }
-    }
-    // Otros.
-    {
-      const grid = this.gridEl('otros');
-      this.optBtn(grid, 'Item', this.sheetThumb(FRUIT_SHEETS[0].url, 32, 32, 17), () => {
-        this.tool = 'item';
-      }, () => this.tool === 'item');
-      this.optBtn(grid, 'Checkpoint', this.sheetThumb(CHECKPOINT.off.url, 64, 64, 1), () => {
-        this.tool = 'checkpoint';
-      }, () => this.tool === 'checkpoint');
-      this.optBtn(grid, 'Plataforma móvil', this.sheetThumb(PLATFORMS.mover.url, 32, 8, 8), () => {
-        this.platformAxis = 'x';
-        this.tool = 'platform';
-      }, () => this.tool === 'platform' && this.platformAxis === 'x');
-      this.optBtn(grid, 'Plataforma que cae', this.sheetThumb(PLATFORMS.faller.url, 32, 10, 4), () => {
-        this.platformAxis = 'fall';
-        this.tool = 'platform';
-      }, () => this.tool === 'platform' && this.platformAxis === 'fall');
-      for (const d of DECOS) {
-        this.optBtn(grid, d.label, this.sheetThumb(d.url, d.w, d.h, 1), () => {
-          this.decoSkin = d.id;
-          this.tool = 'deco';
-        }, () => this.tool === 'deco' && this.decoSkin === d.id);
-      }
-      this.optBtn(grid, 'Salida', this.sheetThumb(EXIT_DOOR.idle.url, 64, 64, 1), () => {
-        this.tool = 'exit';
-      }, () => this.tool === 'exit');
-      const erase = document.createElement('button');
-      erase.type = 'button';
-      erase.className = 'opt text';
-      erase.textContent = '⌫ Goma';
-      erase.title = 'Borrar';
-      erase.onclick = () => {
-        this.tool = 'erase';
-        this.refreshSelection();
-      };
-      this.optBtns.push({ btn: erase, isSel: () => this.tool === 'erase' });
-      grid.appendChild(erase);
     }
   }
 
-  private refreshSelection(): void {
-    for (const o of this.optBtns) o.btn.classList.toggle('sel', o.isSel());
+  private buildPersonajeFlyout(fly: HTMLElement): void {
+    const grid = this.fgrid(fly);
+    for (const c of CHAR_SKINS) {
+      this.fopt(grid, c.label, this.sheetThumb(c.idle.url, 32, 32, c.idle.frames), () => {
+        this.playerSkin = c.id;
+        this.tool = 'player_start';
+      });
+    }
+  }
+
+  private buildEnemigosFlyout(fly: HTMLElement): void {
+    const walk = this.fsect(fly, 'Caminantes', true);
+    for (const e of ENEMIES.filter((x) => x.kind === 'walker')) {
+      this.fopt(walk, e.label, this.sheetThumb(e.tex.url, e.tex.fw, e.tex.fh, e.tex.frames), () => {
+        this.enemySkin = e.id;
+        this.tool = 'enemy';
+      });
+    }
+    const air = this.fsect(fly, 'Voladores', true);
+    for (const e of ENEMIES.filter((x) => x.kind === 'flyer')) {
+      this.fopt(air, e.label, this.sheetThumb(e.tex.url, e.tex.fw, e.tex.fh, e.tex.frames), () => {
+        this.enemySkin = e.id;
+        this.tool = 'enemy';
+      });
+    }
+  }
+
+  private buildFrutasFlyout(fly: HTMLElement): void {
+    const grid = this.fgrid(fly);
+    for (const f of FRUITS) {
+      const sheet = FRUIT_SHEETS.find((s) => s.key === f.key)!;
+      this.fopt(grid, f.label, this.sheetThumb(sheet.url, 32, 32, sheet.frames), () => {
+        this.fruitSkin = f.id;
+        this.tool = 'fruit';
+      });
+    }
+  }
+
+  private buildGemasFlyout(fly: HTMLElement): void {
+    const grid = this.fgrid(fly);
+    for (const g of GEMS) {
+      this.fopt(grid, g.label, this.sheetThumb(g.url, 32, 32, 1), () => {
+        this.gemColor = g.id;
+        this.tool = 'gem';
+      });
+    }
+  }
+
+  private buildObstaculosFlyout(fly: HTMLElement): void {
+    const grid = this.fgrid(fly);
+    const dims: Record<string, [string, number, number, number]> = {
+      spikes: [OBSTACLES[0].image!.url, 16, 16, 1],
+      saw: [OBSTACLES[1].tex!.url, 38, 38, 8],
+      fire: [OBSTACLES[2].tex!.url, 16, 32, 3],
+      arrow: [OBSTACLES[3].tex!.url, 18, 18, 10],
+      rock: [OBSTACLES[4].image!.url, 42, 42, 1],
+      spikehead: [OBSTACLES[5].image!.url, 54, 52, 1],
+      trampoline: [TRAMP_IDLE.url, 28, 28, 1],
+    };
+    for (const o of OBSTACLES) {
+      const [url, fw, fh, frames] = dims[o.id]!;
+      this.fopt(grid, o.label, this.sheetThumb(url, fw, fh, frames), () => {
+        this.obstacle = o.id;
+        this.tool = 'spikes';
+      });
+    }
+  }
+
+  private buildOtrosFlyout(fly: HTMLElement): void {
+    const grid = this.fgrid(fly);
+    this.fopt(grid, 'Item', this.sheetThumb(FRUIT_SHEETS[0].url, 32, 32, 17), () => {
+      this.tool = 'item';
+    });
+    this.fopt(grid, 'Checkpoint', this.sheetThumb(CHECKPOINT.off.url, 64, 64, 1), () => {
+      this.tool = 'checkpoint';
+    });
+    this.fopt(grid, 'Plataforma móvil', this.sheetThumb(PLATFORMS.mover.url, 32, 8, 8), () => {
+      this.platformAxis = 'x';
+      this.tool = 'platform';
+    });
+    this.fopt(grid, 'Plataforma que cae', this.sheetThumb(PLATFORMS.faller.url, 32, 10, 4), () => {
+      this.platformAxis = 'fall';
+      this.tool = 'platform';
+    });
+    for (const d of DECOS) {
+      this.fopt(grid, d.label, this.sheetThumb(d.url, d.w, d.h, 1), () => {
+        this.decoSkin = d.id;
+        this.tool = 'deco';
+      });
+    }
+    this.fopt(grid, 'Salida', this.sheetThumb(EXIT_DOOR.idle.url, 64, 64, 1), () => {
+      this.tool = 'exit';
+    });
+  }
+
+  private pushRecent(label: string, style: Record<string, string>, apply: () => void): void {
+    this.recents = this.recents.filter((r) => r.label !== label);
+    this.recents.unshift({ label, style, apply });
+    this.recents = this.recents.slice(0, 4);
+  }
+
+  private thumbForTool(): { label: string; style: Record<string, string> } {
+    const sel = this.currentSelection();
+    if (this.tool === 'ground') return { label: `Piso ${this.tileVariant}`, style: this.tileThumb(this.tileVariant) };
+    if (this.tool === 'erase') return { label: 'Borrar', style: {} };
+    if (this.tool === 'hand') return { label: 'Mano', style: {} };
+    if (!sel) return { label: '—', style: {} };
+    const p = this.preview(sel.kind, sel.props);
+    let url = '';
+    let fw = 16;
+    let fh = p.fh;
+    let frames = 1;
+    if (sel.kind === 'player_start') {
+      const c = CHAR_SKINS.find((x) => x.id === sel.props['skin']) ?? CHAR_SKINS[0];
+      url = c.idle.url; fw = 32; frames = c.idle.frames;
+    } else if (sel.kind === 'walker' || sel.kind === 'flyer') {
+      const s = ENEMIES.find((x) => x.id === sel.props['skin']) ?? ENEMIES[0];
+      url = s.tex.url; fw = s.tex.fw; frames = s.tex.frames;
+    } else if (sel.kind === 'fruit') {
+      const sheet = FRUIT_SHEETS.find((s) => s.key === (FRUITS.find((f) => f.id === sel.props['skin']) ?? FRUITS[0]).key)!;
+      url = sheet.url; fw = 32; frames = sheet.frames;
+    } else if (sel.kind === 'gem') {
+      url = (GEMS.find((g) => g.id === sel.props['color']) ?? GEMS[0]).url; fw = 32; frames = 1;
+    } else if (sel.kind === 'item') {
+      url = FRUIT_SHEETS[0].url; fw = 32; frames = 17;
+    } else if (sel.kind === 'checkpoint') {
+      url = CHECKPOINT.off.url; fw = 64; frames = 1;
+    } else if (sel.kind === 'platform') {
+      const plat = sel.props['axis'] === 'fall' ? PLATFORMS.faller : PLATFORMS.mover;
+      url = plat.url; fw = plat.fw; frames = plat.frames;
+    } else if (sel.kind === 'spikes') {
+      const o = OBSTACLES.find((x) => x.id === (sel.props['variant'] ?? 'spikes')) ?? OBSTACLES[0];
+      if (o.tex) { url = o.tex.url; fw = o.tex.fw; frames = o.tex.frames; }
+      else { url = o.image!.url; fw = p.fh; frames = 1; }
+    } else if (sel.kind === 'deco') {
+      const d = DECOS.find((x) => x.id === sel.props['skin']) ?? DECOS[0];
+      url = d.url; fw = d.w; frames = 1;
+    } else if (sel.kind === 'exit') {
+      url = EXIT_DOOR.idle.url; fw = 64; frames = 1;
+    }
+    void fh;
+    return { label: this.toolLabel(), style: this.sheetThumb(url, fw, p.fh, frames, 40) };
+  }
+
+  private toolLabel(): string {
+    switch (this.tool) {
+      case 'ground': return `Piso ${this.tileVariant}`;
+      case 'player_start': return (CHAR_SKINS.find((c) => c.id === this.playerSkin) ?? CHAR_SKINS[0]).label;
+      case 'enemy': return (ENEMIES.find((e) => e.id === this.enemySkin) ?? ENEMIES[0]).label;
+      case 'fruit': return (FRUITS.find((f) => f.id === this.fruitSkin) ?? FRUITS[0]).label;
+      case 'gem': return (GEMS.find((g) => g.id === this.gemColor) ?? GEMS[0]).label;
+      case 'item': return 'Item';
+      case 'checkpoint': return 'Checkpoint';
+      case 'platform': return this.platformAxis === 'fall' ? 'Plataforma que cae' : 'Plataforma móvil';
+      case 'spikes': return (OBSTACLES.find((o) => o.id === this.obstacle) ?? OBSTACLES[0]).label;
+      case 'deco': return (DECOS.find((d) => d.id === this.decoSkin) ?? DECOS[0]).label;
+      case 'exit': return 'Salida';
+      case 'erase': return 'Borrar';
+      case 'hand': return 'Mano';
+      default: return '—';
+    }
+  }
+
+  private refreshRail(): void {
+    document.querySelectorAll<HTMLElement>('#ed-rail [data-edtool]').forEach((b) => {
+      b.classList.toggle('active', b.getAttribute('data-edtool') === this.tool);
+    });
+    const cur = document.getElementById('ed-current');
+    if (cur) {
+      const t = this.thumbForTool();
+      cur.title = t.label;
+      cur.style.backgroundImage = t.style['backgroundImage'] ?? '';
+      cur.style.backgroundSize = t.style['backgroundSize'] ?? '';
+      cur.style.backgroundPosition = t.style['backgroundPosition'] ?? '';
+    }
+    const rec = document.getElementById('ed-recents');
+    if (rec) {
+      rec.textContent = '';
+      for (const r of this.recents) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.title = r.label;
+        btn.style.backgroundImage = r.style['backgroundImage'];
+        btn.style.backgroundSize = r.style['backgroundSize'];
+        btn.style.backgroundPosition = r.style['backgroundPosition'];
+        btn.onclick = () => {
+          r.apply();
+          this.closeFlyout();
+          this.refreshRail();
+        };
+        rec.appendChild(btn);
+      }
+    }
     this.updateGhost(this.hoverX, this.hoverY);
   }
 
-  private refreshToolHighlight(): void {
-    this.refreshSelection();
+  private refreshSelection(): void {
+    this.refreshRail();
   }
 
+  private refreshToolHighlight(): void {
+    this.refreshRail();
+  }
   /** Estilo de miniatura para una variante de piso (escala 2x). */
   private tileThumb(v: number): Record<string, string> {
     if (v < 10) {
@@ -712,6 +820,64 @@ export class EditorScene extends Phaser.Scene {
   private updateCoords(x: number, y: number): void {
     const node = document.getElementById('ed-coords');
     if (node) node.textContent = x >= 0 && y >= 0 ? `celda ${x},${y}` : '';
+  }
+
+  private panBy(dx: number, dy: number): void {
+    this.cameras.main.scrollX -= dx / this.cameras.main.zoom;
+    this.cameras.main.scrollY -= dy / this.cameras.main.zoom;
+  }
+
+  /** Pinch con dos dedos: zoom centrado en el punto medio. True si lo manejó. */
+  private pinchZoom(pointer: Phaser.Input.Pointer): boolean {
+    const p1 = this.input.pointer1;
+    const p2 = this.input.pointer2;
+    if (!p1.isDown || !p2 || !p2.isDown || pointer === p1) {
+      if (!p2 || !p2.isDown) this.pinchDist = 0;
+      return false;
+    }
+    const d = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+    const mx = (p1.x + p2.x) / 2;
+    const my = (p1.y + p2.y) / 2;
+    if (this.pinchDist > 0 && d > 0) {
+      const cam = this.cameras.main;
+      const before = cam.getWorldPoint(mx, my);
+      cam.setZoom(Phaser.Math.Clamp(cam.zoom * (d / this.pinchDist), 0.25, 4));
+      const after = cam.getWorldPoint(mx, my);
+      cam.scrollX += before.x - after.x;
+      cam.scrollY += before.y - after.y;
+    }
+    this.pinchDist = d;
+    return true;
+  }
+
+  /** Ajusta zoom para que el nivel entre completo. */
+  private fitToScreen(): void {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const t of this.level.tiles) {
+      minX = Math.min(minX, t.x);
+      minY = Math.min(minY, t.y);
+      maxX = Math.max(maxX, t.x);
+      maxY = Math.max(maxY, t.y);
+    }
+    for (const e of this.level.entities) {
+      minX = Math.min(minX, e.x);
+      minY = Math.min(minY, e.y);
+      maxX = Math.max(maxX, e.x);
+      maxY = Math.max(maxY, e.y);
+    }
+    const cam = this.cameras.main;
+    if (minX === Infinity) {
+      cam.setZoom(1);
+      cam.centerOn(15 * T, 8 * T);
+      return;
+    }
+    const w = (maxX - minX + 1) * T + T * 2;
+    const h = (maxY - minY + 1) * T + T * 2;
+    cam.setZoom(Phaser.Math.Clamp(Math.min(this.scale.width / w, this.scale.height / h), 0.25, 4));
+    cam.centerOn(((minX + maxX + 1) / 2) * T, ((minY + maxY + 1) / 2) * T);
   }
 
   private setStatus(text: string, ok: boolean): void {
@@ -807,10 +973,12 @@ export class EditorScene extends Phaser.Scene {
 
   private setupInput(): void {
     this.input.mouse?.disableContextMenu();
+    this.input.addPointer(2);
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.painting = true;
       this.panning = false;
       this.erasing = pointer.rightButtonDown();
+      this.pinchDist = 0;
       this.downX = pointer.x;
       this.downY = pointer.y;
       this.lastPaintKey = '';
@@ -819,6 +987,7 @@ export class EditorScene extends Phaser.Scene {
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.pinchZoom(pointer)) return;
       const hover = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
       const hx = Math.floor(hover.x / T);
       const hy = Math.floor(hover.y / T);
@@ -831,16 +1000,20 @@ export class EditorScene extends Phaser.Scene {
         this.paintAt(pointer);
         return;
       }
+      const panMode = this.tool === 'hand' || this.spaceDown || pointer.middleButtonDown();
+      if (panMode) {
+        this.panBy(pointer.x - this.downX, pointer.y - this.downY);
+        this.downX = pointer.x;
+        this.downY = pointer.y;
+        return;
+      }
       if (!this.panning) {
         const dx = pointer.x - this.downX;
         const dy = pointer.y - this.downY;
         if (Math.hypot(dx, dy) > DRAG_THRESHOLD) this.panning = true;
       }
       if (this.panning) {
-        const dx = pointer.x - this.downX;
-        const dy = pointer.y - this.downY;
-        this.cameras.main.scrollX -= dx / this.cameras.main.zoom;
-        this.cameras.main.scrollY -= dy / this.cameras.main.zoom;
+        this.panBy(pointer.x - this.downX, pointer.y - this.downY);
         this.downX = pointer.x;
         this.downY = pointer.y;
       } else {
@@ -865,27 +1038,44 @@ export class EditorScene extends Phaser.Scene {
     this.input.on(
       'wheel',
       (
-        _pointer: Phaser.Input.Pointer,
+        pointer: Phaser.Input.Pointer,
         _gameObjects: unknown[],
         _deltaX: number,
         deltaY: number,
       ) => {
-        const next = Phaser.Math.Clamp(this.cameras.main.zoom - deltaY * 0.001, 0.25, 4);
-        this.cameras.main.setZoom(next);
+        const cam = this.cameras.main;
+        const before = cam.getWorldPoint(pointer.x, pointer.y);
+        const next = Phaser.Math.Clamp(cam.zoom - deltaY * 0.001, 0.25, 4);
+        cam.setZoom(next);
+        const after = cam.getWorldPoint(pointer.x, pointer.y);
+        cam.scrollX += before.x - after.x;
+        cam.scrollY += before.y - after.y;
       },
     );
 
     this.input.keyboard?.on('keydown-E', () => {
+      if (this.typing()) return;
       this.setTool('erase');
     });
-
+    this.input.keyboard?.on('keydown-H', () => {
+      if (this.typing()) return;
+      this.setTool('hand');
+    });
+    this.input.keyboard?.on('keydown-F', () => {
+      if (this.typing()) return;
+      this.fitToScreen();
+    });
     this.input.keyboard?.on('keydown-ESC', () => {
-      this.setTool(null);
+      if (!this.flyout().hidden) this.closeFlyout();
+      else this.setTool(null);
     });
     this.input.keyboard?.on('keydown-SPACE', (e: KeyboardEvent) => {
       if (this.typing()) return;
       e.preventDefault();
-      this.testLevel();
+      this.spaceDown = true;
+    });
+    this.input.keyboard?.on('keyup-SPACE', () => {
+      this.spaceDown = false;
     });
     const digits: (Tool | null)[] = ['ground', 'player_start', 'enemy', 'fruit', 'gem', 'spikes', 'checkpoint', 'platform', 'deco'];
     digits.forEach((tool, i) => {
@@ -918,6 +1108,7 @@ export class EditorScene extends Phaser.Scene {
     const tileX = Math.floor(worldPoint.x / T);
     const tileY = Math.floor(worldPoint.y / T);
     if (tileX < 0 || tileY < 0) return;
+    if (this.tool === 'hand') return;
     // En drag-pintado, no repetir el mismo tile.
     const key = `${this.tool}:${tileX},${tileY}`;
     if (key === this.lastPaintKey) return;

@@ -16,7 +16,9 @@
       #touch { position: absolute; left: 0; right: 0; bottom: 0; display: none; justify-content: space-between; padding: 12px; pointer-events: none; }
       body.playing #touch { display: flex; }
       body.editing #stage { width: 100%; max-width: none; }
-      body.editing #game-frame { width: min(100% - 240px, calc((100vh - 220px) * 16 / 9)); margin-inline: auto; }
+      body.editing #game-frame { width: min(100% - 156px, calc((100vh - 220px) * 16 / 9)); margin-inline: auto; }
+      body.ed-collapsed #game-frame { width: min(100%, calc((100vh - 220px) * 16 / 9)); }
+      #ed-topbar #ed-name { flex: 0 1 220px; min-width: 100px; }
       #touch .grp { display: flex; gap: 12px; }
       #touch button { pointer-events: auto; width: 64px; height: 64px; font-size: 24px; border-radius: 50%; border: none; opacity: 0.65; touch-action: none; }
       #ad-slot { width: 100%; min-height: 100px; display: flex; flex-direction: column;
@@ -30,7 +32,6 @@
       #ed-topbar { position: fixed; top: 0; left: 0; right: 0; z-index: 10; min-height: 48px;
         display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 6px 8px;
         background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif; font-size: 14px; }
-      #ed-topbar #ed-name { flex: 1 1 140px; min-width: 100px; }
       #ed-topbar #ed-open { max-width: 160px; }
       #ed-more-wrap { position: relative; }
       #ed-more-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30;
@@ -42,7 +43,42 @@
         background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif;
         font-size: 14px; padding: 8px; user-select: none; overflow-y: auto;
         display: flex; flex-direction: column; gap: 8px; }
-      body.ed-collapsed #ed-panel { display: none; }
+      body.ed-collapsed #ed-panel, body.ed-collapsed #ed-rail, body.ed-collapsed #ed-flyout { display: none; }
+      #ed-rail { position: fixed; left: 0; top: 48px; bottom: 32px; width: 140px; z-index: 10;
+        background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif;
+        font-size: 13px; padding: 6px; user-select: none; overflow-y: auto;
+        display: flex; flex-direction: column; gap: 2px; }
+      #ed-rail button[data-edcat], #ed-rail button[data-edtool] {
+        display: flex; align-items: center; gap: 6px; width: 100%; min-height: 40px;
+        padding: 6px 8px; text-align: left; }
+      #ed-rail button[data-edcat] .nm, #ed-rail button[data-edtool] .nm { flex: 1; }
+      #ed-rail button[data-edcat] .ar { color: #aaaacc; }
+      #ed-rail button[data-edcat].open { background: #4a9eff; border-color: #4a9eff; }
+      #ed-rail button[data-edtool].active { background: #4a9eff; border-color: #4a9eff; }
+      #ed-rail .ed-sep { height: 1px; background: #33334d; margin: 4px 0; }
+      #ed-rail .ed-cur label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+        color: #aaaacc; display: block; margin-bottom: 2px; }
+      #ed-current { width: 44px; height: 44px; border: 1px solid #55557a; border-radius: 8px;
+        background-color: #23233d; background-repeat: no-repeat; background-position: center;
+        image-rendering: pixelated; }
+      #ed-recents { display: flex; gap: 4px; flex-wrap: wrap; }
+      #ed-recents button { width: 40px; height: 40px; padding: 0; image-rendering: pixelated;
+        background-repeat: no-repeat; background-position: center; background-color: #23233d;
+        border: 1px solid #44446a; border-radius: 6px; cursor: pointer; }
+      #ed-flyout { position: fixed; z-index: 20; width: 172px; max-height: calc(100vh - 100px);
+        overflow-y: auto; background: #23233d; border: 1px solid #55557a; border-radius: 0 10px 10px 0;
+        padding: 8px; color: #fff; font-family: system-ui, sans-serif; }
+      #ed-flyout[hidden] { display: none; }
+      #ed-flyout .ed-fgrid { display: grid; grid-template-columns: repeat(3, 48px); gap: 6px;
+        justify-content: center; }
+      #ed-flyout .ed-fsect { grid-column: 1 / -1; }
+      #ed-flyout .ed-fsect > button { width: 100%; min-height: 40px; text-align: left;
+        font-size: 12px; font-weight: 700; color: #fff; background: #33334d;
+        border: 1px solid #55557a; border-radius: 6px; cursor: pointer; }
+      #ed-flyout button.opt { width: 48px; height: 48px; padding: 0; image-rendering: pixelated;
+        background-repeat: no-repeat; background-position: center;
+        background-color: #1a1a2e; border: 1px solid #44446a; border-radius: 6px; cursor: pointer; }
+      #ed-flyout button.opt.sel { border-color: #4a9eff; outline: 2px solid #4a9eff; }
       #ed-statusbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; min-height: 32px;
         display: flex; gap: 12px; align-items: center; padding: 4px 12px;
         background: #141428; color: #fff; font-family: system-ui, sans-serif; font-size: 13px; }
@@ -163,23 +199,6 @@
         border: 1px solid #55557a; border-radius: 6px; padding: 6px 8px; min-width: 140px; }
       #editor-ui select { font-size: 14px; color: #fff; background: #23233d;
         border: 1px solid #55557a; border-radius: 6px; padding: 6px 8px; max-width: 180px; }
-      #ed-tile-btn { width: 36px; height: 36px; padding: 0; image-rendering: pixelated;
-        background-repeat: no-repeat; }
-      #ed-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
-      #ed-tabs button { flex: 1 1 auto; padding: 7px 4px; font-size: 12px; }
-      #ed-tabs button.active { background: #4a9eff; border-color: #4a9eff; }
-      #ed-grids { overflow-y: auto; }
-      .ed-grid { display: grid; grid-template-columns: repeat(auto-fill, 40px); gap: 4px;
-        align-content: start; }
-      .ed-grid[hidden] { display: none; }
-      .ed-grid .ed-sect { grid-column: 1 / -1; font-size: 11px; text-transform: uppercase;
-        letter-spacing: 1px; color: #aaaacc; margin-top: 4px; }
-      .ed-grid button.opt { width: 40px; height: 40px; padding: 0; image-rendering: pixelated;
-        background-repeat: no-repeat; background-position: center;
-        background-color: #1a1a2e; border: 1px solid #44446a; border-radius: 6px; cursor: pointer; }
-      .ed-grid button.opt.sel { border-color: #4a9eff; outline: 2px solid #4a9eff; }
-      .ed-grid button.opt.text { width: auto; grid-column: span 2; font-size: 12px; padding: 0 8px;
-        height: 40px; image-rendering: auto; }
     </style>
   </head>
   <body>
@@ -246,29 +265,22 @@
           </div>
         </div>
       </div>
-      <div id="ed-panel">
-      <div id="ed-tabs" role="tablist">
-        <button type="button" data-edtab="piso" class="active">Piso</button>
-        <button type="button" data-edtab="personaje">Pers.</button>
-        <button type="button" data-edtab="enemigos">Enem.</button>
-        <button type="button" data-edtab="frutas">Fruta</button>
-        <button type="button" data-edtab="gemas">Gema</button>
-        <button type="button" data-edtab="obstaculos">Obst.</button>
-        <button type="button" data-edtab="otros">Otros</button>
+      <div id="ed-rail">
+        <button type="button" data-edcat="piso"><span class="ico">🧱</span><span class="nm">Piso</span><span class="ar">▸</span></button>
+        <button type="button" data-edcat="personaje"><span class="ico">🦸</span><span class="nm">Personaje</span><span class="ar">▸</span></button>
+        <button type="button" data-edcat="enemigos"><span class="ico">👾</span><span class="nm">Enemigos</span><span class="ar">▸</span></button>
+        <button type="button" data-edcat="frutas"><span class="ico">🍎</span><span class="nm">Fruta</span><span class="ar">▸</span></button>
+        <button type="button" data-edcat="gemas"><span class="ico">💎</span><span class="nm">Gema</span><span class="ar">▸</span></button>
+        <button type="button" data-edcat="obstaculos"><span class="ico">⚠️</span><span class="nm">Obstáculo</span><span class="ar">▸</span></button>
+        <button type="button" data-edcat="otros"><span class="ico">📦</span><span class="nm">Otros</span><span class="ar">▸</span></button>
+        <div class="ed-sep"></div>
+        <button type="button" data-edtool="hand"><span class="ico">✋</span><span class="nm">Mano</span></button>
+        <button type="button" data-edtool="erase"><span class="ico">⌫</span><span class="nm">Borrar</span></button>
+        <div class="ed-sep"></div>
+        <div class="ed-cur"><label>Actual</label><div id="ed-current"></div></div>
+        <div class="ed-cur"><label>Recientes</label><div id="ed-recents"></div></div>
       </div>
-      <div id="ed-grids">
-        <div class="ed-grid" data-edgrid="piso"></div>
-        <div class="ed-grid" data-edgrid="personaje" hidden></div>
-        <div class="ed-grid" data-edgrid="enemigos" hidden></div>
-        <div class="ed-grid" data-edgrid="frutas" hidden></div>
-        <div class="ed-grid" data-edgrid="gemas" hidden></div>
-        <div class="ed-grid" data-edgrid="obstaculos" hidden></div>
-        <div class="ed-grid" data-edgrid="otros" hidden></div>
-      </div>
-      <div class="row">
-        <button type="button" id="ed-validate">Validar</button>
-      </div>
-      </div>
+      <div id="ed-flyout" hidden></div>
       <div id="ed-statusbar">
         <span id="ed-status"></span>
         <span id="ed-coords"></span>
