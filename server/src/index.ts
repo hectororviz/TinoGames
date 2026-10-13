@@ -105,6 +105,25 @@ async function main(): Promise<void> {
 
   app.get('/health', async () => ({ ok: true }));
 
+  // CORS: la web vive en otro subdominio. Sin cookies (Bearer token),
+  // se refleja el origen pedido o se restringe con CORS_ORIGINS.
+  const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  app.addHook('onRequest', async (req, reply) => {
+    const origin = req.headers.origin;
+    const allow =
+      ALLOWED_ORIGINS.length === 0 ? (origin ?? '*') : origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+    reply.header('Access-Control-Allow-Origin', allow);
+    reply.header('Vary', 'Origin');
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') {
+      return reply.code(204).send();
+    }
+  });
+
   // --- Auth ---
   app.post('/v1/auth/register', async (req, reply) => {
     const body = req.body as { email?: unknown; password?: unknown };
