@@ -14,6 +14,8 @@ import {
   type RemoteLevelMeta,
 } from './api.js';
 
+import { BG_BLUE } from './catalog.js';
+
 let pendingCreate = false;
 
 export function openModal(title: string): HTMLElement {
@@ -43,8 +45,18 @@ function wireModalChrome(): void {
 wireModalChrome();
 
 export class MenuScene extends Phaser.Scene {
+  private bg!: Phaser.GameObjects.TileSprite;
+
   constructor() {
     super('menu');
+  }
+
+  preload(): void {
+    this.load.image(BG_BLUE.key, BG_BLUE.url);
+  }
+
+  override update(): void {
+    if (this.bg) this.bg.tilePositionX += 0.3;
   }
 
   create(): void {
@@ -53,22 +65,7 @@ export class MenuScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       document.body.classList.remove('menu');
     });
-    this.cameras.main.setBackgroundColor('#1a1a2e');
-
-    this.add
-      .text(240, 40, 'TinoGames', {
-        fontSize: '32px',
-        color: '#ffffff',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5, 0);
-
-    this.add
-      .text(240, 76, 'Elegí un nivel para jugar o crear', {
-        fontSize: '13px',
-        color: '#aaaacc',
-      })
-      .setOrigin(0.5, 0);
+    this.bg = this.add.tileSprite(240, 135, 480, 270, BG_BLUE.key);
 
     this.renderAuth();
     this.renderPin();
@@ -77,9 +74,9 @@ export class MenuScene extends Phaser.Scene {
     document.getElementById('menu-new')!.onclick = () => {
       this.scene.start('editor', {});
     };
-    // Home nuevo (paso 1).
+    // Home.
     closeModal();
-    document.getElementById('btn-profile')!.onclick = () => this.openProfile();
+    document.getElementById('home-profile')!.onclick = () => this.openProfile();
     document.getElementById('home-create')!.onclick = () => this.createLevel();
     document.getElementById('home-search')!.onclick = () => this.openSearch();
     document.getElementById('home-mine')!.onclick = () => this.openMine();
