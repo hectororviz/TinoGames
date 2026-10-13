@@ -32,6 +32,8 @@ interface Walker {
   rangePx: number;
   dir: number;
   speed: number;
+  bw: number;
+  bh: number;
 }
 
 interface Flyer {
@@ -95,6 +97,7 @@ export class GameScene extends Phaser.Scene {
   private startX = 0;
   private startY = 0;
   private killY = 0;
+  private solidSet: Set<string> = new Set();
   private walkers: Walker[] = [];
   private flyers: Flyer[] = [];
   private floaters: Floater[] = [];
@@ -184,6 +187,9 @@ export class GameScene extends Phaser.Scene {
 
     // --- Solidos ---
     const solids = this.physics.add.staticGroup();
+    this.solidSet = new Set(
+      level.tiles.filter((t) => t.t === 'ground').map((t) => `${t.x},${t.y}`),
+    );
     let maxX = 0;
     let maxY = 0;
     for (const t of level.tiles) {
@@ -216,9 +222,9 @@ export class GameScene extends Phaser.Scene {
       const props = (e.props ?? {}) as Record<string, unknown>;
       switch (e.kind) {
         case 'player_start': {
-          this.startX = cx;
-          const floorBelow = level.tiles.some((t) => t.t === 'ground' && t.x === e.x && t.y === e.y + 1);
-          this.startY = floorBelow ? (e.y + 1) * T - 14 : cy;
+          const p = this.snapToGround(e.x, e.y);
+          this.startX = p.x;
+          this.startY = p.y;
           break;
         }
         case 'item': {
@@ -262,6 +268,8 @@ export class GameScene extends Phaser.Scene {
             rangePx: ((props['range'] as number | undefined) ?? skin.range ?? 4) * T,
             dir: 1,
             speed: ((props['speed'] as number | undefined) ?? skin.speed ?? FEEL.walkerSpeed),
+            bw: skin.bw,
+            bh: skin.bh,
           });
           break;
         }
@@ -363,6 +371,10 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.player, moverSprites);
     this.physics.add.collider(this.player, fallerSprites);
     for (const w of this.walkers) this.physics.add.collider(w.spr, solids);
+    for (const w of this.walkers) {
+      this.physics.add.collider(w.spr, moverSprites);
+      this.physics.add.collider(w.spr, fallerSprites);
+    }
     this.physics.add.collider(this.player, items, (_p, obj) => {
       const go = obj as Phaser.GameObjects.GameObject;
       const isFruit = go.getData?.('fruit') === true;
@@ -486,8 +498,11 @@ export class GameScene extends Phaser.Scene {
     c.setData('active', true);
     c.setTexture(CHECKPOINT.on.key, 0);
     c.play('checkpoint-flag');
-    this.startX = c.x;
-    this.startY = c.y - 56;
+    const tileX = Math.floor(c.x / T);
+    const tileY = Math.floor(c.y / T);
+    const p = this.snapToGround(tileX, tileY);
+    this.startX = p.x;
+    this.startY = p.y;
     this.showMsg('Checkpoint');
   }
 
@@ -575,7 +590,24 @@ export class GameScene extends Phaser.Scene {
   private standingOn(plat: Phaser.Physics.Arcade.Sprite): boolean {
     const pb = this.player.body as Phaser.Physics.Arcade.Body;
     const qb = plat.body as Phaser.Physics.Arcade.Body;
-    return pb.touching.down && qb.touching.up;
+    return (
+      pb.touching.down &&
+      qb.touching.up &&
+      Math.abs(pb.bottom - qb.top) < 8 &&
+      pb.right > qb.left + 2 &&
+      pb.left < qb.right - 2
+    );
+  }
+
+  /** Baja hasta 6 tiles buscando piso: devuelve centro del jugador apoyado. */
+  private snapToGround(tx: number, ty: number): { x: number; y: number } {
+    const level = this.currentLevel;
+    for (let d = 0; d <= 6; d++) {
+      if (level.tiles.some((t) => t.t === 'ground' && t.x === tx && t.y === ty + d)) {
+        return { x: tx * T + T / 2, y: (ty + d) * T - 14 };
+      }
+    }
+    return { x: tx * T + T / 2, y: ty * T + T / 2 };
   }
 
   override update(_time: number, deltaMs: number): void {
@@ -630,13 +662,24 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Walkers: patrulla.
+    // Walkers: patrulla (flip solo si se aleja hacia afuera, sin oscilar).
+    // Giran en bordes para no tirarse al vacío (salvo sobre plataformas).
+    const onPlatform = (x: number, y: number): boolean =>
+      this.movers.some((m) => Math.abs(x - m.spr.x) < 36 && Math.abs(y - m.spr.y) < 14) ||
+      this.fallers.some((f) => f.state !== 'gone' && Math.abs(x - f.spr.x) < 36 && Math.abs(y - f.spr.y) < 14);
     for (const w of this.walkers) {
       w.spr.setVelocityX(w.dir * w.speed);
-      if (Math.abs(w.spr.x - w.homeX) > w.rangePx) w.dir *= -1;
+      if ((w.spr.x - w.homeX) * w.dir > w.rangePx) w.dir *= -1;
       const wb = w.spr.body as Phaser.Physics.Arcade.Body;
-      if (wb.blocked.left) w.dir = 1;
-      if (wb.blocked.right) w.dir = -1;
+      if (wb.blocked.left && w.dir < 0) w.dir = 1;
+      if (wb.blocked.right && w.dir > 0) w.dir = -1;
+      if (wb.blocked.down && !onPlatform(w.spr.x, w.spr.y)) {
+        const aheadX = w.spr.x + w.dir * (w.bw / 2 + 3);
+        const belowY = w.spr.y + w.bh / 2 + 6;
+        if (!this.solidSet.has(`${Math.floor(aheadX / T)},${Math.floor(belowY / T)}`)) {
+          w.dir *= -1;
+        }
+      }
       w.spr.setFlipX(w.dir < 0);
     }
 
@@ -646,32 +689,37 @@ export class GameScene extends Phaser.Scene {
       f.spr.setPosition(f.baseX, f.baseY + Math.sin(f.t * f.freq * Math.PI * 2) * f.ampPx);
     }
 
-    // Plataformas móviles: ping-pong + arrastre del jugador.
+    // Plataformas móviles: cinemáticas (posición, no velocidad) + arrastre exacto.
     for (const m of this.movers) {
-      m.spr.setVelocityX(m.dir * m.speed);
-      if (Math.abs(m.spr.x - m.homeX) > m.rangePx) m.dir *= -1;
+      m.spr.x += m.dir * m.speed * delta;
+      if (m.spr.x - m.homeX > m.rangePx) {
+        m.spr.x = m.homeX + m.rangePx;
+        m.dir = -1;
+      } else if (m.spr.x - m.homeX < -m.rangePx) {
+        m.spr.x = m.homeX - m.rangePx;
+        m.dir = 1;
+      }
       const dx = m.spr.x - m.prevX;
       m.prevX = m.spr.x;
       if (dx !== 0 && this.standingOn(m.spr)) this.player.x += dx;
     }
 
-    // Plataformas que caen.
+    // Plataformas que caen: tiemblan poco, caen a velocidad topeada y vuelven.
     for (const f of this.fallers) {
       const fb = f.spr.body as Phaser.Physics.Arcade.Body;
       if (f.state === 'idle') {
         if (this.standingOn(f.spr)) {
           f.state = 'shaking';
-          f.timer = 0.4;
+          f.timer = 0.25;
         }
       } else if (f.state === 'shaking') {
         f.timer -= delta;
         f.spr.x = f.homeX + Math.sin(this.time.now / 30 + f.jitter) * 2;
-        if (this.standingOn(f.spr)) this.player.x += f.spr.x - (f.spr.getData('px') as number ?? f.spr.x);
-        f.spr.setData('px', f.spr.x);
         if (f.timer <= 0) {
           f.state = 'falling';
           fb.setAllowGravity(true);
           fb.setImmovable(false);
+          fb.setMaxVelocity(0, 280);
           f.spr.setVelocity(0, 0);
         }
       } else if (f.state === 'falling') {
