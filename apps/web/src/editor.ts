@@ -409,7 +409,6 @@ export class EditorScene extends Phaser.Scene {
     el('ed-more').onclick = () => {
       moreMenu.hidden = !moreMenu.hidden;
     };
-    el('ed-validate').onclick = () => this.updateStatus();
     el('ed-save').onclick = () => {
       void this.saveFlow(false);
     };
