@@ -56,11 +56,8 @@ export class EditorScene extends Phaser.Scene {
   private loadSprites(): void {
     this.load.spritesheet('tile', tilesPaUrl, { frameWidth: T, frameHeight: T });
     this.load.image('spike', vendorSpikeUrl);
-    this.load.image('walker', pinkUrl);
-    this.load.image('flyer', pinkUrl);
-    this.load.image('exit', pinkUrl);
-    this.load.image('player', pinkUrl);
-    this.load.image('item', appleUrl);
+    this.load.spritesheet('pink', pinkUrl, { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('apple', appleUrl, { frameWidth: 32, frameHeight: 32 });
     this.load.once('complete', () => {
       this.makeTextures();
       this.setupScene();
@@ -179,29 +176,42 @@ export class EditorScene extends Phaser.Scene {
     }
 
     for (const entity of this.level.entities) {
-      let texture = 'item';
+      let texture = 'apple';
+      let frame: number | undefined = 0;
       switch (entity.kind) {
         case 'player_start':
-          texture = 'player';
+          texture = 'pink';
+          frame = 0;
           break;
         case 'walker':
           texture = 'walker';
+          frame = undefined;
           break;
         case 'flyer':
           texture = 'flyer';
+          frame = undefined;
           break;
         case 'item':
-          texture = 'item';
+          texture = 'apple';
+          frame = 0;
           break;
         case 'spikes':
           texture = 'spike';
+          frame = undefined;
           break;
         case 'exit':
           texture = 'exit';
+          frame = undefined;
           break;
       }
-      const sprite = this.add.image(entity.x * T, entity.y * T, texture);
-      sprite.setOrigin(0, 0);
+      const cx = entity.x * T + T / 2;
+      const cy = entity.y * T + T / 2;
+      const sprite = this.add.image(cx, cy, texture, frame);
+      sprite.setOrigin(0.5, 0.5);
+      // Sprites de 32px (pink/apple/flyer) se escalan al tile de 16px.
+      if (texture === 'pink' || texture === 'apple' || texture === 'flyer') {
+        sprite.setDisplaySize(T, T);
+      }
       this.sprites.push(sprite);
     }
   }

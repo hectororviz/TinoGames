@@ -80,11 +80,18 @@ export class GameScene extends Phaser.Scene {
     document.body.classList.add('playing');
     document.body.classList.remove('editing');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      document.body.classList.remove('playing');
+      document.body.classList.remove('playing', 'from-editor');
     });
     const level = data?.level ?? sampleLevel as Level;
     this.currentLevel = level;
     this.fromEditor = data?.fromEditor ?? false;
+    document.body.classList.toggle('from-editor', this.fromEditor);
+    const backBtn = document.getElementById('game-back');
+    if (backBtn) {
+      backBtn.onclick = () => {
+        this.scene.start('editor');
+      };
+    }
     assertValidLevel(level);
     this.walkers = [];
     this.flyers = [];
