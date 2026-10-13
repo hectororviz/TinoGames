@@ -1,0 +1,63 @@
+CODIFICACION NIVEL VALENTINO v1 — 1 bloque = 1 caracter
+=====================================================
+Ancho: 30 / Alto: 12. Todas las filas miden lo mismo.
+Blanco (sin pintar) tambien es un bloque: se escribe con punto.
+
+Color        -> Caracter -> Que es
+---------------------------------
+Blanco       -> .  -> vacio / cielo
+Negro        -> #  -> piso (plataforma / suelo)
+Verde        -> P  -> player inicio (UNO solo, parado sobre #)
+Rojo         -> E  -> enemigo caminante (SIEMPRE parado justo sobre #,
+                   se mueve izq-der sobre el piso)
+Azul         -> V  -> enemigo flotante (SIEMPRE en el aire, sin # debajo,
+                   se mueve flotando arriba-abajo)
+Amarillo     -> *  -> item a recolectar (en el aire, nunca dentro de #)
+Rosa/Violeta -> F  -> meta / salida (UNA sola, parada sobre #,
+                   SOLO abre si junto TODOS los *)
+Columna de 3 o mas rojos o azules seguidos en vertical
+             -> ^  -> pared de pinches (no se mueve, mata/toca y duele)
+
+REGLAS PARA PINTAR (importante para la IA):
+1. Pintar toda la hoja: lo no pintado es cielo (.).
+2. P y E y F van SIEMPRE con # justo debajo.
+3. V y * van SIEMPRE en el aire (sin #).
+4. Si queres pinches: pinta una COLUMNA vertical de 3+ rojos (o azules).
+   La IA la traduce como ^^^ y el juego la hace pinches.
+5. La meta F solo finaliza si se capturaron todos los *.
+
+MUESTRA (copiar tal cual, 30x12, valida):
+..............................
+..............................
+..............................
+.......*......................
+.................V............
+.................*............
+.......E......######..........
+....######............^...*...
+...........*..........^..V....
+..P...E...............^....F..
+##########..########..########
+##########..########..########
+
+Que tiene la muestra:
+- P en (x2) sobre piso, E caminante en piso (x6) y E sobre plataforma (x7)
+- V flotante alto (x17) cuidando un * y V bajo (x25)
+- 4 items: alto, con volador, sobre foso (x11), alto derecha
+- Pared de pinches ^ en x22 (3 de alto) antes de la meta
+- Meta F en x27, con fosos en x10-11 y x20-21
+
+PROMPT PARA LA IA (pegale esto + la foto + la codificacion de arriba):
+--------------------------------------------------------------------
+Te paso una foto de una hoja cuadriculada de 30 columnas x 12 filas.
+Cada cuadradito pintado es UN bloque. Traducila a texto con esta
+codificacion, un caracter por bloque:
+. = blanco/vacio, # = negro/piso, P = verde/player,
+E = rojo/enemigo piso, V = azul/enemigo aire,
+* = amarillo/item, F = rosa/meta.
+Si ves una columna vertical de 3 o mas rojos o azules seguidos,
+escribila como ^ (una por celda, en vertical), no como E/V.
+Devolve SOLO el mapa: 12 lineas de 30 caracteres cada una,
+sin explicaciones, sin numerar filas, sin espacios extra.
+Verifica: todas las filas miden 30, hay 1 P, 1 F,
+cada P/E/F tiene # debajo, cada V/* esta en aire.
