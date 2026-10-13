@@ -8,6 +8,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    document.body.classList.remove('playing', 'editing');
     this.cameras.main.setBackgroundColor('#1a1a2e');
 
     this.add

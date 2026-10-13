@@ -8,29 +8,49 @@ import appleUrl from '../../../assets/Apple.png?url';
 
 const T = 16;
 const STORAGE_KEY = 'tinogames-level';
-const UI_HEIGHT = 100;
+/** Distancia en px de pantalla para distinguir click (pintar) de drag (pan). */
+const DRAG_THRESHOLD = 6;
 
 type Tool = 'ground' | 'player_start' | 'walker' | 'flyer' | 'item' | 'spikes' | 'exit' | 'erase';
+
+function el(id: string): HTMLElement {
+  const node = document.getElementById(id);
+  if (!node) throw new Error(`missing #${id}`);
+  return node;
+}
 
 export class EditorScene extends Phaser.Scene {
   private level!: Level;
   private tool: Tool = 'ground';
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private sprites: Phaser.GameObjects.GameObject[] = [];
-  private paletteTexts = new Map<Tool, Phaser.GameObjects.Text>();
-  private statusText!: Phaser.GameObjects.Text;
-  private isPanning = false;
-  private lastPointerX = 0;
-  private lastPointerY = 0;
+  private lastGridKey = '';
+  private painting = false;
+  private panning = false;
+  private downX = 0;
+  private downY = 0;
+  private lastPaintKey = '';
 
   constructor() {
     super('editor');
   }
 
   create(): void {
+    document.body.classList.add('editing');
+    document.body.classList.remove('playing');
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      document.body.classList.remove('editing');
+    });
     this.level = this.loadLevel();
     this.cameras.main.setBackgroundColor('#1a1a2e');
+    this.lastGridKey = '';
+    this.painting = false;
+    this.panning = false;
     this.loadSprites();
+  }
+
+  override update(): void {
+    this.drawGrid();
   }
 
   private loadSprites(): void {
@@ -49,31 +69,66 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private makeTextures(): void {
+    // En revisitas las texturas ya existen en el TextureManager global.
+    if (this.textures.exists('walker') && this.textures.exists('flyer') && this.textures.exists('exit')) {
+      return;
+    }
     const g = this.add.graphics();
-    g.fillStyle(0xcc3333, 1).fillRect(0, 0, 28, 28);
-    g.fillStyle(0xffffff, 1).fillCircle(8, 10, 4);
-    g.fillStyle(0xffffff, 1).fillCircle(20, 10, 4);
-    g.fillStyle(0x000000, 1).fillCircle(9, 11, 2);
-    g.fillStyle(0x000000, 1).fillCircle(21, 11, 2);
-    g.generateTexture('walker', 28, 28);
-    g.clear();
-    g.fillStyle(0x3388ff, 1).fillCircle(16, 16, 12);
-    g.fillStyle(0xffffff, 1).fillCircle(16, 16, 6);
-    g.generateTexture('flyer', 32, 32);
-    g.clear();
-    g.fillStyle(0xc084fc, 1).fillRect(0, 0, 16, 32);
-    g.fillStyle(0xe9d5ff, 1).fillRect(0, 0, 16, 4);
-    g.generateTexture('exit', 16, 32);
+    if (!this.textures.exists('walker')) {
+      g.fillStyle(0xcc3333, 1).fillRect(0, 0, 28, 28);
+      g.fillStyle(0xffffff, 1).fillCircle(8, 10, 4);
+      g.fillStyle(0xffffff, 1).fillCircle(20, 10, 4);
+      g.fillStyle(0x000000, 1).fillCircle(9, 11, 2);
+      g.fillStyle(0x000000, 1).fillCircle(21, 11, 2);
+      g.generateTexture('walker', 28, 28);
+      g.clear();
+    }
+    if (!this.textures.exists('flyer')) {
+      g.fillStyle(0x3388ff, 1).fillCircle(16, 16, 12);
+      g.fillStyle(0xffffff, 1).fillCircle(16, 16, 6);
+      g.generateTexture('flyer', 32, 32);
+      g.clear();
+    }
+    if (!this.textures.exists('exit')) {
+      g.fillStyle(0xc084fc, 1).fillRect(0, 0, 16, 32);
+      g.fillStyle(0xe9d5ff, 1).fillRect(0, 0, 16, 4);
+      g.generateTexture('exit', 16, 32);
+      g.clear();
+    }
     g.destroy();
   }
 
   private setupScene(): void {
-    this.drawGrid();
+    this.gridGraphics = this.add.graphics();
+    this.centerCamera();
     this.renderLevel();
-    this.createPalette();
-    this.createButtons();
+    this.bindUi();
     this.setupInput();
     this.updateStatus();
+  }
+
+  private centerCamera(): void {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const t of this.level.tiles) {
+      minX = Math.min(minX, t.x);
+      minY = Math.min(minY, t.y);
+      maxX = Math.max(maxX, t.x);
+      maxY = Math.max(maxY, t.y);
+    }
+    for (const e of this.level.entities) {
+      minX = Math.min(minX, e.x);
+      minY = Math.min(minY, e.y);
+      maxX = Math.max(maxX, e.x);
+      maxY = Math.max(maxY, e.y);
+    }
+    if (minX === Infinity) {
+      this.cameras.main.centerOn(15 * T, 8 * T);
+    } else {
+      this.cameras.main.centerOn(((minX + maxX + 1) / 2) * T, ((minY + maxY + 1) / 2) * T);
+    }
   }
 
   private loadLevel(): Level {
@@ -93,14 +148,24 @@ export class EditorScene extends Phaser.Scene {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(this.level));
   }
 
+  /** Redibuja la grid solo sobre el rectángulo visible (cubre bordes con zoom/pan). */
   private drawGrid(): void {
-    this.gridGraphics = this.add.graphics();
-    this.gridGraphics.lineStyle(1, 0x333333, 0.5);
-    const w = this.scale.width;
-    const h = this.scale.height;
-    for (let x = 0; x <= w; x += T) this.gridGraphics.lineBetween(x, 0, x, h);
-    for (let y = 0; y <= h; y += T) this.gridGraphics.lineBetween(0, y, w, y);
-    this.gridGraphics.setScrollFactor(0);
+    if (!this.gridGraphics) return;
+    const cam = this.cameras.main;
+    const viewW = this.scale.width / cam.zoom;
+    const viewH = this.scale.height / cam.zoom;
+    const left = Math.floor(cam.scrollX / T) * T - T;
+    const top = Math.floor(cam.scrollY / T) * T - T;
+    const right = Math.ceil(cam.scrollX + viewW) + T;
+    const bottom = Math.ceil(cam.scrollY + viewH) + T;
+    const key = `${left},${top},${right},${bottom}`;
+    if (key === this.lastGridKey) return;
+    this.lastGridKey = key;
+    const g = this.gridGraphics;
+    g.clear();
+    g.lineStyle(1, 0x444466, 0.6);
+    for (let x = left; x <= right; x += T) g.lineBetween(x, top, x, bottom);
+    for (let y = top; y <= bottom; y += T) g.lineBetween(left, y, right, y);
   }
 
   private renderLevel(): void {
@@ -141,105 +206,58 @@ export class EditorScene extends Phaser.Scene {
     }
   }
 
-  private createPalette(): void {
-    const tools: { tool: Tool; label: string; x: number }[] = [
-      { tool: 'ground', label: 'Piso', x: 10 },
-      { tool: 'erase', label: 'Borrar', x: 70 },
-      { tool: 'player_start', label: 'Inicio', x: 130 },
-      { tool: 'walker', label: 'Walker', x: 190 },
-      { tool: 'flyer', label: 'Flyer', x: 250 },
-      { tool: 'item', label: 'Item', x: 310 },
-      { tool: 'spikes', label: 'Pinchos', x: 370 },
-      { tool: 'exit', label: 'Salida', x: 430 },
-    ];
+  private bindUi(): void {
+    const tools = document.querySelectorAll<HTMLElement>('#ed-tools [data-tool]');
+    tools.forEach((btn) => {
+      btn.onclick = () => {
+        const next = btn.getAttribute('data-tool') as Tool | null;
+        if (next) {
+          this.tool = next;
+          this.refreshToolHighlight();
+        }
+      };
+    });
+    this.refreshToolHighlight();
 
-    for (const item of tools) {
-      const text = this.add
-        .text(item.x, 10, item.label, {
-          fontSize: '12px',
-          color: '#ffffff',
-          backgroundColor: '#333333',
-          padding: { x: 6, y: 4 },
-        })
-        .setScrollFactor(0)
-        .setInteractive({ useHandCursor: true });
-      text.on('pointerdown', () => {
-        this.tool = item.tool;
-        this.updatePaletteHighlight();
-      });
-      this.paletteTexts.set(item.tool, text);
-    }
-    this.updatePaletteHighlight();
+    el('ed-validate').onclick = () => this.updateStatus();
+    el('ed-save').onclick = () => {
+      this.saveLevel();
+      this.flashStatus('Nivel guardado', true);
+    };
+    el('ed-export').onclick = () => this.exportLevel();
+    el('ed-import').onclick = () => this.importLevel();
+    el('ed-test').onclick = () => this.testLevel();
+    el('ed-exit').onclick = () => {
+      this.saveLevel();
+      this.scene.start('menu');
+    };
   }
 
-  private updatePaletteHighlight(): void {
-    for (const [tool, text] of this.paletteTexts) {
-      text.setStyle({ backgroundColor: tool === this.tool ? '#4a9eff' : '#333333' });
-    }
+  private refreshToolHighlight(): void {
+    const tools = document.querySelectorAll<HTMLElement>('#ed-tools [data-tool]');
+    tools.forEach((btn) => {
+      btn.classList.toggle('active', btn.getAttribute('data-tool') === this.tool);
+    });
   }
 
-  private createButtons(): void {
-    const buttons = [
-      { id: 'validate', label: 'Validar', x: 10 },
-      { id: 'save', label: 'Guardar', x: 80 },
-      { id: 'export', label: 'Exportar', x: 150 },
-      { id: 'import', label: 'Importar', x: 220 },
-      { id: 'test', label: 'Probar', x: 290 },
-    ];
-
-    for (const btn of buttons) {
-      this.add
-        .text(btn.x, 40, btn.label, {
-          fontSize: '12px',
-          color: '#ffffff',
-          backgroundColor: '#555555',
-          padding: { x: 6, y: 4 },
-        })
-        .setScrollFactor(0)
-        .setInteractive({ useHandCursor: true })
-        .on('pointerdown', () => this.handleAction(btn.id));
-    }
-
-    this.statusText = this.add
-      .text(10, 70, '', { fontSize: '11px', color: '#ff4444' })
-      .setScrollFactor(0);
-  }
-
-  private handleAction(action: string): void {
-    switch (action) {
-      case 'validate':
-        this.updateStatus();
-        break;
-      case 'save':
-        this.saveLevel();
-        this.flashStatus('Nivel guardado', '#44ff44');
-        break;
-      case 'export':
-        this.exportLevel();
-        break;
-      case 'import':
-        this.importLevel();
-        break;
-      case 'test':
-        this.testLevel();
-        break;
-    }
+  private setStatus(text: string, ok: boolean): void {
+    const node = el('ed-status');
+    node.textContent = text;
+    node.classList.toggle('ok', ok);
+    node.classList.toggle('err', !ok);
   }
 
   private updateStatus(): void {
     const errors = validateLevel(this.level);
     if (errors.length === 0) {
-      this.statusText.setText('Nivel valido');
-      this.statusText.setColor('#44ff44');
+      this.setStatus('Nivel válido', true);
     } else {
-      this.statusText.setText(errors.map((e) => e.message).join('\n'));
-      this.statusText.setColor('#ff4444');
+      this.setStatus(errors.map((e) => e.message).join(' · '), false);
     }
   }
 
-  private flashStatus(message: string, color: string): void {
-    this.statusText.setText(message);
-    this.statusText.setColor(color);
+  private flashStatus(message: string, ok: boolean): void {
+    this.setStatus(message, ok);
     this.time.delayedCall(2000, () => this.updateStatus());
   }
 
@@ -267,14 +285,15 @@ export class EditorScene extends Phaser.Scene {
           const level = JSON.parse(reader.result as string) as Level;
           if (level.format === 2) {
             this.level = level;
+            this.centerCamera();
             this.renderLevel();
             this.updateStatus();
-            this.flashStatus('Nivel importado', '#44ff44');
+            this.flashStatus('Nivel importado', true);
           } else {
-            this.flashStatus('Formato invalido', '#ff4444');
+            this.flashStatus('Formato inválido', false);
           }
         } catch {
-          this.flashStatus('Error al leer archivo', '#ff4444');
+          this.flashStatus('Error al leer archivo', false);
         }
       };
       reader.readAsText(file);
@@ -285,36 +304,48 @@ export class EditorScene extends Phaser.Scene {
   private testLevel(): void {
     const errors = validateLevel(this.level);
     if (errors.length > 0) {
-      this.flashStatus('Corrige los errores antes de probar', '#ff4444');
+      this.flashStatus('Corrige los errores antes de probar', false);
       return;
     }
-    this.scene.start('game', { level: this.level });
+    this.saveLevel();
+    this.scene.start('game', { level: this.level, fromEditor: true });
   }
 
   private setupInput(): void {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.y < UI_HEIGHT) return;
-      this.isPanning = true;
-      this.lastPointerX = pointer.x;
-      this.lastPointerY = pointer.y;
+      this.painting = true;
+      this.panning = false;
+      this.downX = pointer.x;
+      this.downY = pointer.y;
+      this.lastPaintKey = '';
+      this.paintAt(pointer);
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (this.isPanning) {
-        const dx = pointer.x - this.lastPointerX;
-        const dy = pointer.y - this.lastPointerY;
+      if (!this.painting || !pointer.isDown) return;
+      if (!this.panning) {
+        const dx = pointer.x - this.downX;
+        const dy = pointer.y - this.downY;
+        if (Math.hypot(dx, dy) > DRAG_THRESHOLD) this.panning = true;
+      }
+      if (this.panning) {
+        const dx = pointer.x - this.downX;
+        const dy = pointer.y - this.downY;
         this.cameras.main.scrollX -= dx / this.cameras.main.zoom;
         this.cameras.main.scrollY -= dy / this.cameras.main.zoom;
-        this.lastPointerX = pointer.x;
-        this.lastPointerY = pointer.y;
-      } else if (pointer.isDown && pointer.y >= UI_HEIGHT) {
+        this.downX = pointer.x;
+        this.downY = pointer.y;
+      } else {
         this.paintAt(pointer);
       }
     });
 
-    this.input.on('pointerup', () => {
-      this.isPanning = false;
-    });
+    const stop = (): void => {
+      this.painting = false;
+      this.panning = false;
+    };
+    this.input.on('pointerup', stop);
+    this.input.on('pointerupoutside', stop);
 
     this.input.on(
       'wheel',
@@ -324,14 +355,14 @@ export class EditorScene extends Phaser.Scene {
         _deltaX: number,
         deltaY: number,
       ) => {
-        const newZoom = Phaser.Math.Clamp(this.cameras.main.zoom - deltaY * 0.001, 0.25, 4);
-        this.cameras.main.setZoom(newZoom);
+        const next = Phaser.Math.Clamp(this.cameras.main.zoom - deltaY * 0.001, 0.25, 4);
+        this.cameras.main.setZoom(next);
       },
     );
 
-    this.input.keyboard?.on('keydown-SPACE', () => {
+    this.input.keyboard?.on('keydown-E', () => {
       this.tool = 'erase';
-      this.updatePaletteHighlight();
+      this.refreshToolHighlight();
     });
   }
 
@@ -340,6 +371,10 @@ export class EditorScene extends Phaser.Scene {
     const tileX = Math.floor(worldPoint.x / T);
     const tileY = Math.floor(worldPoint.y / T);
     if (tileX < 0 || tileY < 0) return;
+    // En drag-pintado, no repetir el mismo tile.
+    const key = `${this.tool}:${tileX},${tileY}`;
+    if (key === this.lastPaintKey) return;
+    this.lastPaintKey = key;
 
     if (this.tool === 'erase') {
       this.eraseAt(tileX, tileY);

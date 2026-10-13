@@ -72,8 +72,19 @@ export class GameScene extends Phaser.Scene {
     this.load.image('spike', vendorSpikeUrl);
   }
 
-  create(data?: { level?: Level }): void {
+  private currentLevel!: Level;
+  private fromEditor = false;
+  private keyE!: Phaser.Input.Keyboard.Key;
+
+  create(data?: { level?: Level; fromEditor?: boolean }): void {
+    document.body.classList.add('playing');
+    document.body.classList.remove('editing');
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      document.body.classList.remove('playing');
+    });
     const level = data?.level ?? sampleLevel as Level;
+    this.currentLevel = level;
+    this.fromEditor = data?.fromEditor ?? false;
     assertValidLevel(level);
     this.walkers = [];
     this.flyers = [];
@@ -214,6 +225,7 @@ export class GameScene extends Phaser.Scene {
     // --- Input ---
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keyR = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+    this.keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     this.keyJ = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.J);
     this.input.keyboard!.addCapture(['SPACE', 'UP']);
     bindTouch(
@@ -304,7 +316,11 @@ export class GameScene extends Phaser.Scene {
   override update(_time: number, deltaMs: number): void {
     const delta = Math.min(deltaMs / 1000, 0.05);
     if (Phaser.Input.Keyboard.JustDown(this.keyR)) {
-      this.scene.restart();
+      this.scene.restart({ level: this.currentLevel, fromEditor: this.fromEditor });
+      return;
+    }
+    if (this.fromEditor && Phaser.Input.Keyboard.JustDown(this.keyE)) {
+      this.scene.start('editor');
       return;
     }
 
@@ -390,7 +406,9 @@ export class GameScene extends Phaser.Scene {
       if (d < 24) {
         if (this.exitZone.open) {
           this.won = true;
-          this.showMsg('¡Nivel completo! R para rejugar');
+          this.showMsg(
+            this.fromEditor ? '¡Nivel completo! R rejugar · E editor' : '¡Nivel completo! R para rejugar',
+          );
         } else {
           this.showMsg(`Faltan ${this.fruitsTotal - this.fruits} items`);
         }
