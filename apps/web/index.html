@@ -76,10 +76,46 @@
         font-size: 14px; font-family: system-ui, sans-serif; color: #fff; background: #33334d;
         border: 1px solid #55557a; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
       body.playing #game-back { display: block; }
-      #menu-ui { display: none; width: 100%; box-sizing: border-box;
-        font-family: system-ui, sans-serif; color: #fff; font-size: 14px;
-        flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 16px 24px; }
-      body.menu #menu-ui { display: flex; }
+      #menu-ui { display: none; }
+      body.menu #game-frame { display: none; }
+      #home-banner { display: none; }
+      body.menu #home-banner { display: flex; position: sticky; top: 0; z-index: 20;
+        align-items: center; justify-content: space-between; padding: 8px 16px;
+        background: #141428; color: #fff; font-family: system-ui, sans-serif; }
+      #home-title { font-size: 20px; font-weight: 800; letter-spacing: 0.5px; }
+      #btn-profile { width: 44px; height: 44px; font-size: 20px; border-radius: 50%;
+        border: 1px solid #55557a; background: #33334d; color: #fff; cursor: pointer; }
+      #home { display: none; }
+      body.menu #home { display: flex; flex-direction: column; gap: 14px; align-items: stretch;
+        padding: 48px 24px; max-width: 420px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+      #home button.big { min-height: 60px; font-size: 18px; font-weight: 700; border-radius: 12px;
+        border: 1px solid #55557a; background: #33334d; color: #fff; cursor: pointer;
+        font-family: system-ui, sans-serif; }
+      #home button.big.primary { background: #4a9eff; border-color: #4a9eff; }
+      #home button.big[hidden] { display: none; }
+      #modal-root[hidden] { display: none; }
+      #modal-root { position: fixed; inset: 0; z-index: 50; }
+      #modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.6); }
+      #modal-box { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        width: min(420px, 92vw); max-height: 86vh; overflow-y: auto;
+        background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif; font-size: 14px;
+        border: 1px solid #55557a; border-radius: 12px; padding: 20px 16px 16px; box-sizing: border-box; }
+      #modal-x { position: absolute; top: 6px; right: 6px; width: 40px; height: 40px;
+        border-radius: 8px; border: 1px solid #55557a; background: #33334d; color: #fff;
+        font-size: 16px; cursor: pointer; }
+      #modal-content { display: flex; flex-direction: column; gap: 10px; }
+      #modal-content h2 { margin: 0 0 4px; font-size: 18px; }
+      #modal-content input { min-height: 40px; font-size: 15px; color: #fff; background: #23233d;
+        border: 1px solid #55557a; border-radius: 8px; padding: 8px 12px; width: 100%; box-sizing: border-box; }
+      #modal-content button.action { min-height: 44px; font-size: 15px; font-weight: 600; border-radius: 8px;
+        border: 1px solid #55557a; background: #33334d; color: #fff; cursor: pointer; }
+      #modal-content button.action.primary { background: #4a9eff; border-color: #4a9eff; }
+      #modal-content .tabs { display: flex; gap: 6px; }
+      #modal-content .tabs button { flex: 1; min-height: 40px; border-radius: 8px; border: 1px solid #55557a;
+        background: #23233d; color: #fff; cursor: pointer; font-size: 14px; }
+      #modal-content .tabs button.active { background: #4a9eff; border-color: #4a9eff; }
+      #modal-content .err { color: #ff8888; font-size: 13px; min-height: 18px; }
+      #modal-content .row { display: flex; gap: 8px; align-items: center; }
       #menu-ui #menu-list { display: flex; flex-direction: column; gap: 8px; }
       #menu-ui #menu-mine { display: flex; flex-direction: column; gap: 8px; }
       #menu-ui #menu-sect { color: #aaaacc; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-top: 6px; }
@@ -120,7 +156,16 @@
     </style>
   </head>
   <body>
+    <header id="home-banner">
+      <span id="home-title">TinoGames</span>
+      <button type="button" id="btn-profile" title="Perfil" aria-label="Perfil">👤</button>
+    </header>
     <div id="stage">
+      <div id="home">
+        <button type="button" id="home-create" class="big primary">Crear nivel</button>
+        <button type="button" id="home-search" class="big">Buscar nivel</button>
+        <button type="button" id="home-mine" class="big" hidden>Mis niveles</button>
+      </div>
       <div id="game-frame">
         <div id="app"></div>
         <div id="touch">
@@ -208,6 +253,13 @@
       </div>
     </nav>
     <button type="button" id="game-back">← Editor</button>
+    <div id="modal-root" hidden>
+      <div id="modal-backdrop"></div>
+      <div id="modal-box" role="dialog" aria-modal="true">
+        <button type="button" id="modal-x" aria-label="Cerrar">✕</button>
+        <div id="modal-content"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
     <script>
       window.addEventListener('load', function () {

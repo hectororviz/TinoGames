@@ -14,6 +14,34 @@ import {
   type RemoteLevelMeta,
 } from './api.js';
 
+let pendingCreate = false;
+
+export function openModal(title: string): HTMLElement {
+  const root = document.getElementById('modal-root')!;
+  const box = document.getElementById('modal-content')!;
+  box.textContent = '';
+  const h = document.createElement('h2');
+  h.textContent = title;
+  box.appendChild(h);
+  root.hidden = false;
+  return box;
+}
+
+export function closeModal(): void {
+  document.getElementById('modal-root')!.hidden = true;
+  document.getElementById('modal-content')!.textContent = '';
+}
+
+function wireModalChrome(): void {
+  document.getElementById('modal-x')!.onclick = () => closeModal();
+  document.getElementById('modal-backdrop')!.onclick = () => closeModal();
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('modal-root')!.hidden) closeModal();
+  });
+}
+
+wireModalChrome();
+
 export class MenuScene extends Phaser.Scene {
   constructor() {
     super('menu');
@@ -49,6 +77,163 @@ export class MenuScene extends Phaser.Scene {
     document.getElementById('menu-new')!.onclick = () => {
       this.scene.start('editor', {});
     };
+    // Home nuevo (paso 1).
+    closeModal();
+    document.getElementById('btn-profile')!.onclick = () => this.openProfile();
+    document.getElementById('home-create')!.onclick = () => this.createLevel();
+    document.getElementById('home-search')!.onclick = () => this.openSearch();
+    document.getElementById('home-mine')!.onclick = () => this.openMine();
+    this.renderHome();
+  }
+
+  private renderHome(): void {
+    document.getElementById('home-mine')!.hidden = !getToken();
+  }
+
+  private createLevel(): void {
+    if (getToken()) {
+      this.scene.start('editor', {});
+      return;
+    }
+    pendingCreate = true;
+    this.openProfile('login');
+  }
+
+  private openSearch(): void {
+    openModal('Buscar nivel');
+    const box = document.getElementById('modal-content')!;
+    const tabs = document.createElement('div');
+    tabs.className = 'tabs';
+    const pinTab = document.createElement('button');
+    pinTab.type = 'button';
+    pinTab.textContent = 'Por PIN';
+    pinTab.classList.add('active');
+    const soonTab = document.createElement('button');
+    soonTab.type = 'button';
+    soonTab.textContent = 'Buscar (próximamente)';
+    soonTab.setAttribute('disabled', '');
+    tabs.append(pinTab, soonTab);
+    const input = document.createElement('input');
+    input.placeholder = 'PIN XXXX-XXXX';
+    input.maxLength = 9;
+    input.setAttribute('aria-label', 'PIN de nivel');
+    const err = document.createElement('div');
+    err.className = 'err';
+    const go = document.createElement('button');
+    go.type = 'button';
+    go.className = 'action primary';
+    go.textContent = 'Jugar';
+    go.onclick = () => {
+      err.textContent = '';
+      const pin = input.value.trim();
+      if (!pin) return;
+      go.setAttribute('disabled', '');
+      getByPin(pin).then(
+        (level) => {
+          closeModal();
+          this.scene.start('game', { level: level.body });
+        },
+        (e) => {
+          go.removeAttribute('disabled');
+          err.textContent = e instanceof Error ? e.message : 'No encontrado';
+        },
+      );
+    };
+    box.append(tabs, input, go, err);
+  }
+
+  private openMine(): void {
+    // Paso 3: pantalla propia. Por ahora reutiliza la lista vieja.
+    this.renderMine();
+  }
+
+  private openProfile(tab: 'login' | 'register' = 'login'): void {
+    if (getToken()) {
+      openModal('Perfil');
+      const box = document.getElementById('modal-content')!;
+      const who = document.createElement('div');
+      who.textContent = '…';
+      const out = document.createElement('button');
+      out.type = 'button';
+      out.className = 'action';
+      out.textContent = 'Salir';
+      out.onclick = () => {
+        logout();
+        closeModal();
+        this.renderHome();
+        this.renderAuth();
+        this.renderMine();
+      };
+      box.append(who, out);
+      me().then(
+        (u) => {
+          who.textContent = u.email;
+        },
+        () => {
+          logout();
+          closeModal();
+          this.renderHome();
+        },
+      );
+      return;
+    }
+    openModal('Perfil');
+    const box = document.getElementById('modal-content')!;
+    const tabs = document.createElement('div');
+    tabs.className = 'tabs';
+    const inTab = document.createElement('button');
+    inTab.type = 'button';
+    inTab.textContent = 'Iniciar sesión';
+    const regTab = document.createElement('button');
+    regTab.type = 'button';
+    regTab.textContent = 'Crear cuenta';
+    tabs.append(inTab, regTab);
+    const email = document.createElement('input');
+    email.type = 'email';
+    email.placeholder = 'Email';
+    const pass = document.createElement('input');
+    pass.type = 'password';
+    pass.placeholder = 'Contraseña (8+)';
+    const err = document.createElement('div');
+    err.className = 'err';
+    const go = document.createElement('button');
+    go.type = 'button';
+    go.className = 'action primary';
+    let mode: 'login' | 'register' = tab;
+    const paint = (): void => {
+      inTab.classList.toggle('active', mode === 'login');
+      regTab.classList.toggle('active', mode === 'register');
+      go.textContent = mode === 'login' ? 'Entrar' : 'Crear cuenta';
+    };
+    inTab.onclick = () => {
+      mode = 'login';
+      paint();
+    };
+    regTab.onclick = () => {
+      mode = 'register';
+      paint();
+    };
+    go.onclick = () => {
+      err.textContent = '';
+      const fn = mode === 'login' ? login : register;
+      fn(email.value, pass.value).then(
+        () => {
+          closeModal();
+          this.renderHome();
+          this.renderAuth();
+          this.renderMine();
+          if (pendingCreate) {
+            pendingCreate = false;
+            this.scene.start('editor', {});
+          }
+        },
+        (e) => {
+          err.textContent = e instanceof Error ? e.message : 'Error';
+        },
+      );
+    };
+    box.append(tabs, email, pass, go, err);
+    paint();
   }
 
   private row(box: HTMLElement, name: string, opts: { badge?: string; buttons: { label: string; disabled?: boolean; onClick: () => void }[] }): void {
