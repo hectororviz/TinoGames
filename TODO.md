@@ -28,8 +28,15 @@ pnpm install
 pnpm dev:web            # http://localhost:5173 — flechas/AD, Espacio x2, J dash, R
 pnpm --filter @tinogames/level-schema test   # 7/7
 pnpm typecheck && pnpm build
-docker compose up --build                    # API http://localhost:8080/health
+docker compose up db -d                      # solo Postgres local
+pnpm dev:server                              # API en :8080 (requiere DATABASE_URL)
 ```
+
+## Deploy VPS
+
+Imágenes compiladas por GitHub Actions → GHCR. En el VPS:
+`docker compose pull && docker compose up -d`.
+Caddy-docker-proxy expone `juegos.mposw.com.ar` y `api.juegos.mposw.com.ar`.
 
 ## Pendientes (en orden sugerido)
 

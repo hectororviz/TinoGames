@@ -1,43 +1,72 @@
-# TinoGames local: solo Postgres + API. En el VPS, Caddy-docker-proxy
-# descubre el server por labels (ver bloque comentado).
+# TinoGames: web + API + Postgres.
+# En el VPS: docker compose pull && docker compose up -d.
+# Caddy-docker-proxy (red caddy_net) descubre web y api por labels y les
+# asigna los subdominios con HTTPS automatico.
+
+name: tinogames
 
 services:
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: tinogames
-      POSTGRES_PASSWORD: tinogames
-      POSTGRES_DB: tinogames
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U tinogames']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER}']
       interval: 5s
-      timeout: 3s
+      timeout: 5s
       retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   api:
-    build:
-      context: .
-      dockerfile: server/Dockerfile
+    image: ghcr.io/hectororviz/tinogames-api:${DOCKER_TAG:-latest}
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       PORT: 8080
-      DATABASE_URL: postgres://tinogames:tinogames@db:5432/tinogames
-    ports:
-      - '8080:8080'
-    # VPS (caddy-docker-proxy): descomentar y setear el dominio.
-    # labels:
-    #   caddy: api.tino.example.com
-    #   caddy.reverse_proxy: '{{upstreams 8080}}'
-    # networks:
-    #   - proxy
+    networks:
+      - default
+      - caddy_net
+    labels:
+      caddy: ${API_DOMAIN}
+      caddy.reverse_proxy: "{{upstreams 8080}}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    image: ghcr.io/hectororviz/tinogames-web:${DOCKER_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - api
+    networks:
+      - default
+      - caddy_net
+    labels:
+      caddy: ${WEB_DOMAIN}
+      caddy.reverse_proxy: "{{upstreams 80}}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
-  pgdata:
+  db_data:
 
-# networks:
-#   proxy:
-#     external: true
+networks:
+  caddy_net:
+    external: true
