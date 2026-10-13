@@ -108,6 +108,8 @@ export interface Level {
   game: string;
   /** Id del pack visual. El nivel no guarda sprites. */
   theme: string;
+  /** Bioma de fondo (dia | noche | bosque | cueva | fabrica | blue). Ausente = blue. */
+  bg?: string;
   tiles: Tile[];
   entities: Entity[];
 }

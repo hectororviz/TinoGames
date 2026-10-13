@@ -4,7 +4,7 @@ import { GameScene } from './game.js';
 import { MenuScene } from './menu.js';
 import { EditorScene } from './editor.js';
 
-new Phaser.Game({
+const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'app',
   width: 480,
@@ -21,3 +21,7 @@ new Phaser.Game({
   },
   scene: [MenuScene, GameScene, EditorScene],
 });
+
+if (import.meta.env.DEV) {
+  (window as unknown as { __game: Phaser.Game }).__game = game;
+}

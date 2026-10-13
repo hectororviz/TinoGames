@@ -6,6 +6,7 @@ import { FEEL } from './feel.js';
 import { bindTouch, touchState } from './input.js';
 import {
   BG_BLUE,
+  BIOMES,
   CHAR_SKINS,
   CHECKPOINT,
   DECOS,
@@ -113,6 +114,7 @@ export class GameScene extends Phaser.Scene {
   private flyers: Flyer[] = [];
   private floaters: Floater[] = [];
   private loops: LoopAnim[] = [];
+  private bgLayers: { ts: Phaser.GameObjects.TileSprite; factor: number }[] = [];
   private movers: Mover[] = [];
   private fallers: Faller[] = [];
   private checkpoints: Phaser.Physics.Arcade.Image[] = [];
@@ -141,6 +143,9 @@ export class GameScene extends Phaser.Scene {
     ];
     for (const s of sheets) {
       this.load.spritesheet(s.key, s.url, { frameWidth: s.fw, frameHeight: s.fh });
+    }
+    for (const b of BIOMES) {
+      for (const l of b.layers) this.load.image(l.key, l.url);
     }
     this.load.image('spike', OBSTACLES[0].image!.url);
     this.load.image('rock', OBSTACLES.find((o) => o.id === 'rock')!.image!.url);
@@ -196,8 +201,9 @@ export class GameScene extends Phaser.Scene {
     this.gemsTotal = 0;
     this.won = false;
 
-    // Fondo.
-    this.add.tileSprite(240, 135, 480, 270, BG_BLUE.key).setScrollFactor(0).setDepth(-10);
+    // Fondo por bioma del nivel.
+    this.bgLayers = [];
+    this.makeBackground(level.bg);
 
     // --- Solidos ---
     const solids = this.physics.add.staticGroup();
@@ -449,6 +455,28 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
+  /** Fondo por bioma: capas fijas + parallax según scroll de cámara. */
+  private makeBackground(bg: string | undefined): void {
+    const biome = BIOMES.find((b) => b.id === bg) ?? BIOMES.find((b) => b.id === 'blue')!;
+    for (const l of biome.layers) {
+      if (l.factor === 0 && l.anchor === 'fill' && l.h === 64) {
+        // Plancha tileable clásica.
+        this.add.tileSprite(240, 135, 480, 270, l.key).setScrollFactor(0).setDepth(-10);
+        continue;
+      }
+      if (l.factor === 0) {
+        this.add.image(240, 135, l.key).setScrollFactor(0).setDepth(-10).setDisplaySize(480, 270);
+        continue;
+      }
+      const y = l.anchor === 'top' ? l.h / 2 : 270 - l.h / 2;
+      const ts = this.add.tileSprite(240, y, 480, l.h, l.key).setScrollFactor(0).setDepth(-10);
+      if (l.anchor === 'fill') {
+        const src = this.textures.get(l.key).getSourceImage() as { width: number; height: number };
+        ts.setTileScale(480 / src.width, 270 / src.height);
+      }
+      this.bgLayers.push({ ts, factor: l.factor });
+    }
+  }
   /** Obstáculo en (x,y): estático siempre; los animados con frames manuales. */
   private addHazard(
     hazards: Phaser.GameObjects.Group,
@@ -765,6 +793,12 @@ export class GameScene extends Phaser.Scene {
           f.spr.body!.enable = true;
         }
       }
+    }
+
+    // Parallax del fondo.
+    if (this.bgLayers.length > 0) {
+      const sx = this.cameras.main.scrollX;
+      for (const l of this.bgLayers) l.ts.tilePositionX = sx * l.factor;
     }
 
     // Flotantes: frutas, gemas e items.

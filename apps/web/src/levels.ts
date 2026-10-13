@@ -32,7 +32,7 @@ function isLevel(value: unknown): value is Level {
 }
 
 export function blankLevel(): Level {
-  return { format: 2, game: '0.2', theme: 'pixel-adventure', tiles: [], entities: [] };
+  return { format: 2, game: '0.2', theme: 'pixel-adventure', bg: 'dia', tiles: [], entities: [] };
 }
 
 export function cloneLevel(level: Level): Level {

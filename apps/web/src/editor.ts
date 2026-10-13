@@ -3,6 +3,7 @@ import { validateLevel } from '@tinogames/level-schema';
 import type { Entity, Level } from '@tinogames/level-schema';
 import {
   BG_BLUE,
+  BIOMES,
   CHAR_SKINS,
   CHECKPOINT,
   DECOS,
@@ -45,7 +46,7 @@ type Tool =
   | 'erase'
   | 'hand';
 
-type RailCat = 'piso' | 'personaje' | 'enemigos' | 'frutas' | 'gemas' | 'obstaculos' | 'otros';
+type RailCat = 'piso' | 'personaje' | 'enemigos' | 'frutas' | 'gemas' | 'obstaculos' | 'fondo' | 'otros';
 
 function el(id: string): HTMLElement {
   const node = document.getElementById(id);
@@ -525,6 +526,7 @@ export class EditorScene extends Phaser.Scene {
     else if (cat === 'frutas') this.buildFrutasFlyout(fly);
     else if (cat === 'gemas') this.buildGemasFlyout(fly);
     else if (cat === 'obstaculos') this.buildObstaculosFlyout(fly);
+    else if (cat === 'fondo') this.buildFondoFlyout(fly);
     else this.buildOtrosFlyout(fly);
     const r = anchor.getBoundingClientRect();
     fly.hidden = false;
@@ -662,6 +664,34 @@ export class EditorScene extends Phaser.Scene {
     }
   }
 
+  private buildFondoFlyout(fly: HTMLElement): void {
+    const grid = this.fgrid(fly);
+    for (const b of BIOMES) {
+      const opt = document.createElement('button');
+      opt.type = 'button';
+      opt.className = 'opt wide';
+      opt.title = b.label;
+      opt.style.backgroundImage = `url("${b.thumbUrl}")`;
+      opt.style.backgroundSize = 'cover';
+      opt.style.backgroundPosition = 'center';
+      const label = document.createElement('span');
+      label.textContent = b.label + (this.level.bg === b.id || (!this.level.bg && b.id === 'blue') ? ' ✓' : '');
+      label.className = 'opt-label';
+      const wrap = document.createElement('div');
+      wrap.className = 'opt-wrap';
+      wrap.append(opt, label);
+      opt.onclick = () => {
+        this.pushHistorySilent();
+        this.level.bg = b.id;
+        this.dirty = true;
+        this.closeFlyout();
+        this.refreshRail();
+        this.flashStatus(`Fondo: ${b.label} (guardá para aplicar)`, true);
+      };
+      grid.appendChild(wrap);
+    }
+  }
+
   private buildOtrosFlyout(fly: HTMLElement): void {
     const grid = this.fgrid(fly);
     this.fopt(grid, 'Item', this.sheetThumb(FRUIT_SHEETS[0].url, 32, 32, 17), () => {
@@ -687,6 +717,12 @@ export class EditorScene extends Phaser.Scene {
     this.fopt(grid, 'Salida', this.sheetThumb(EXIT_DOOR.idle.url, 64, 64, 1), () => {
       this.tool = 'exit';
     });
+  }
+
+  /** Guarda estado para undo sin limpiar redo (usado por cambios no-pincel). */
+  private pushHistorySilent(): void {
+    this.past.push(cloneLevel(this.level));
+    if (this.past.length > 60) this.past.shift();
   }
 
   private pushRecent(label: string, style: Record<string, string>, apply: () => void): void {

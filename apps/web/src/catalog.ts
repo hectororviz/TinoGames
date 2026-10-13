@@ -50,6 +50,18 @@ import trampJumpUrl from '../../../assets/traps/trampoline-jump.png?url';
 import box1Url from '../../../assets/deco/deco-box1.png?url';
 import box2Url from '../../../assets/deco/deco-box2.png?url';
 import box3Url from '../../../assets/deco/deco-box3.png?url';
+import bgDiaSky from '../../../assets/bg/biomes/dia-sky.png?url';
+import bgDiaClouds from '../../../assets/bg/biomes/dia-clouds.png?url';
+import bgDiaHills from '../../../assets/bg/biomes/dia-hills.png?url';
+import bgNocheSky from '../../../assets/bg/biomes/noche-sky.png?url';
+import bgNocheStars from '../../../assets/bg/biomes/noche-stars.png?url';
+import bgNocheHills from '../../../assets/bg/biomes/noche-hills.png?url';
+import bgBosqueBg from '../../../assets/bg/biomes/bosque-bg.png?url';
+import bgBosqueMid from '../../../assets/bg/biomes/bosque-mid.png?url';
+import bgCuevaBg from '../../../assets/bg/biomes/cueva-bg.png?url';
+import bgCuevaStalac from '../../../assets/bg/biomes/cueva-stalac.png?url';
+import bgFabricaBg from '../../../assets/bg/biomes/fabrica-bg.png?url';
+import bgFabricaCity from '../../../assets/bg/biomes/fabrica-city.png?url';
 import enChicken from '../../../assets/enemies/en-chicken-run.png?url';
 import enMushroom from '../../../assets/enemies/en-mushroom-run.png?url';
 import enRadish from '../../../assets/enemies/en-radish-run.png?url';
@@ -240,3 +252,65 @@ export const PLATFORMS = {
 };
 export const BG_BLUE = { key: 'bg-blue', url: bgBlue };
 export const PINK_LEGACY = { key: 'pink', url: pinkUrl };
+
+export const BIOMES: Biome[] = [
+  {
+    id: 'dia', label: 'Día', thumbUrl: bgDiaSky,
+    layers: [
+      { key: 'bg-dia-sky', url: bgDiaSky, factor: 0, h: 270, anchor: 'fill' },
+      { key: 'bg-dia-clouds', url: bgDiaClouds, factor: 0.15, h: 135, anchor: 'top' },
+      { key: 'bg-dia-hills', url: bgDiaHills, factor: 0.4, h: 90, anchor: 'bottom' },
+    ],
+  },
+  {
+    id: 'noche', label: 'Noche', thumbUrl: bgNocheSky,
+    layers: [
+      { key: 'bg-noche-sky', url: bgNocheSky, factor: 0, h: 270, anchor: 'fill' },
+      { key: 'bg-noche-stars', url: bgNocheStars, factor: 0.1, h: 270, anchor: 'fill' },
+      { key: 'bg-noche-hills', url: bgNocheHills, factor: 0.35, h: 90, anchor: 'bottom' },
+    ],
+  },
+  {
+    id: 'bosque', label: 'Bosque', thumbUrl: bgBosqueMid,
+    layers: [
+      { key: 'bg-bosque-bg', url: bgBosqueBg, factor: 0, h: 270, anchor: 'fill' },
+      { key: 'bg-bosque-mid', url: bgBosqueMid, factor: 0.3, h: 270, anchor: 'fill' },
+    ],
+  },
+  {
+    id: 'cueva', label: 'Cueva', thumbUrl: bgCuevaBg,
+    layers: [
+      { key: 'bg-cueva-bg', url: bgCuevaBg, factor: 0, h: 270, anchor: 'fill' },
+      { key: 'bg-cueva-stalac', url: bgCuevaStalac, factor: 0.5, h: 120, anchor: 'top' },
+    ],
+  },
+  {
+    id: 'fabrica', label: 'Fábrica', thumbUrl: bgFabricaCity,
+    layers: [
+      { key: 'bg-fabrica-bg', url: bgFabricaBg, factor: 0, h: 270, anchor: 'fill' },
+      { key: 'bg-fabrica-city', url: bgFabricaCity, factor: 0.3, h: 150, anchor: 'bottom' },
+    ],
+  },
+  {
+    id: 'blue', label: 'Plano azul', thumbUrl: bgBlue,
+    layers: [{ key: 'bg-blue', url: bgBlue, factor: 0, h: 64, anchor: 'fill' }],
+  },
+];
+
+export interface BiomeLayer {
+  key: string;
+  url: string;
+  /** 0 = fijo a pantalla; >0 = parallax (fracción del scroll). */
+  factor: number;
+  /** Alto nativo para escalar la capa. */
+  h: number;
+  /** Anclaje vertical de la banda (las de pantalla completa usan 'fill'). */
+  anchor: 'fill' | 'top' | 'bottom';
+}
+
+export interface Biome {
+  id: string;
+  label: string;
+  thumbUrl: string;
+  layers: BiomeLayer[];
+}

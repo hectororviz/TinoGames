@@ -22,6 +22,12 @@ Regla: si se agrega más del pack (frutas, enemigos, fondos), se anota acá.
 - `saw_on.png`: sierra encendida, tira 304×38 (8 frames de 38×38). Obstáculo.
 - `fire_on.png`: fuego encendido, tira 48×32 (3 frames de 16×32). Obstáculo.
 
+## Fondos / biomas (`bg/`)
+- `bg-blue.png` y 6 colores: planchas 64px del pack Pixel Adventure (CC0).
+- `biomes/bosque-bg.png` + `biomes/bosque-mid.png`: capas del bosque de
+  **Sunny Land** (Ansimuz, CC0 según su página de itch.io), vía mirror GitHub.
+- `biomes/dia-*`, `noche-*`, `cueva-*`, `fabrica-*`: generados propios.
+
 ## Pack completo (Pixel Adventure 1 + 2, CC0)
 Carpetas: `chars/` (4 personajes × idle/run/jump/fall), `fruits/` (6 frutas,
 más Apple/Strawberry en raíz), `gems/` (generadas propias: la gema no está en
