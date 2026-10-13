@@ -6,13 +6,22 @@
     <meta name="theme-color" content="#87b5e8" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>TinoGames</title>
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9763480712544528" crossorigin="anonymous"></script>
     <style>
-      html, body { margin: 0; height: 100%; background: #87b5e8; overscroll-behavior: none; }
-      #app { display: flex; align-items: center; justify-content: center; height: 100%; }
-      #touch { position: fixed; inset: auto 0 0 0; display: none; justify-content: space-between; padding: 12px; pointer-events: none; }
+      html, body { margin: 0; min-height: 100%; background: #87b5e8; overscroll-behavior: none; }
+      body { display: flex; flex-direction: column; align-items: center; }
+      #stage { width: min(960px, 100vw); display: flex; flex-direction: column; align-items: stretch; }
+      #game-frame { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+      #app { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
+      #touch { position: absolute; left: 0; right: 0; bottom: 0; display: none; justify-content: space-between; padding: 12px; pointer-events: none; }
       body.playing #touch { display: flex; }
       #touch .grp { display: flex; gap: 12px; }
       #touch button { pointer-events: auto; width: 64px; height: 64px; font-size: 24px; border-radius: 50%; border: none; opacity: 0.65; touch-action: none; }
+      #ad-slot { width: 100%; min-height: 100px; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 4px;
+        background: #6f97c8; color: #e8f1fb; font-family: system-ui, sans-serif; font-size: 12px; }
+      #ad-slot:empty { display: none; }
+      @media (max-width: 600px) { #ad-slot { min-height: 60px; } }
       #editor-ui { display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 10;
         background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif;
         font-size: 14px; padding: 6px 8px; user-select: none; }
@@ -52,7 +61,31 @@
     </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="stage">
+      <div id="game-frame">
+        <div id="app"></div>
+        <div id="touch">
+          <div class="grp">
+            <button id="btn-left">◀</button>
+            <button id="btn-right">▶</button>
+          </div>
+          <div class="grp">
+            <button id="btn-jump">A</button>
+            <button id="btn-dash">B</button>
+          </div>
+        </div>
+      </div>
+      <div id="ad-slot" aria-label="Publicidad">
+        <ins
+          class="adsbygoogle"
+          style="display: block"
+          data-ad-client="ca-pub-9763480712544528"
+          data-ad-slot="8831048337"
+          data-ad-format="auto"
+          data-full-width-responsive="true"
+        ></ins>
+      </div>
+    </div>
     <div id="menu-ui" aria-label="Niveles guardados">
       <div id="menu-list"></div>
       <div id="menu-empty" style="display: none">Sin niveles guardados — creá uno.</div>
@@ -85,17 +118,14 @@
         <span id="ed-status"></span>
       </div>
     </nav>
-    <div id="touch">
-      <div class="grp">
-        <button id="btn-left">◀</button>
-        <button id="btn-right">▶</button>
-      </div>
-      <div class="grp">
-        <button id="btn-jump">A</button>
-        <button id="btn-dash">B</button>
-      </div>
-    </div>
     <button type="button" id="game-back">← Editor</button>
     <script type="module" src="/src/main.ts"></script>
+    <script>
+      window.addEventListener('load', function () {
+        try {
+          (window.adsbygoogle = window.adsbygoogle || []).push({});
+        } catch (e) {}
+      });
+    </script>
   </body>
 </html>
