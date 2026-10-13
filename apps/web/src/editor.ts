@@ -25,9 +25,11 @@ import {
   deleteLevel,
   findLevel,
   listLevels,
+  setRemote,
   updateLevel,
 } from './levels.js';
 import type { EditorData } from './levels.js';
+import { getToken, publishLevel, updateRemoteLevel } from './api.js';
 
 const T = 16;
 /** Distancia en px de pantalla para distinguir click (pintar) de drag (pan). */
@@ -424,6 +426,9 @@ export class EditorScene extends Phaser.Scene {
         this.flashStatus(err instanceof Error ? err.message : 'No se pudo guardar', false);
       }
     };
+    el('ed-publish').onclick = () => {
+      void this.publishLevel();
+    };
     el('ed-export').onclick = () => this.exportLevel();
     el('ed-import').onclick = () => this.importLevel();
     el('ed-test').onclick = () => this.testLevel();
@@ -573,8 +578,36 @@ export class EditorScene extends Phaser.Scene {
     this.time.delayedCall(2000, () => this.updateStatus());
   }
 
-  private exportLevel(): void {
-    const json = JSON.stringify(this.level, null, 2);
+  private async publishLevel(): Promise<void> {
+    const errors = validateLevel(this.level);
+    if (errors.length > 0) {
+      this.flashStatus('Corrige los errores antes de publicar', false);
+      return;
+    }
+    if (!getToken()) {
+      this.flashStatus('Entrá con tu cuenta desde el menú para publicar', false);
+      return;
+    }
+    try {
+      this.saveLevel();
+    } catch (err) {
+      this.flashStatus(err instanceof Error ? err.message : 'No se pudo guardar', false);
+      return;
+    }
+    const entry = findLevel(this.openId ?? '');
+    if (!entry) return;
+    try {
+      const out = entry.remoteId
+        ? await updateRemoteLevel(entry.remoteId, entry.name, entry.level)
+        : await publishLevel(entry.name, entry.level);
+      setRemote(entry.id, out.id, out.pin);
+      this.flashStatus(`Publicado · PIN ${out.pin}`, true);
+    } catch (err) {
+      this.flashStatus(err instanceof Error ? err.message : 'No se pudo publicar', false);
+    }
+  }
+
+  private exportLevel(): void {    const json = JSON.stringify(this.level, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

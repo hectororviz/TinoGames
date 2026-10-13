@@ -50,9 +50,16 @@
       body.playing #game-back { display: block; }
       #menu-ui { display: none; position: fixed; left: 0; right: 0; top: 118px; z-index: 10;
         font-family: system-ui, sans-serif; color: #fff; font-size: 14px;
-        flex-direction: column; align-items: center; gap: 8px; padding: 0 16px; }
+        flex-direction: column; align-items: center; gap: 8px; padding: 0 16px;
+        max-height: calc(100vh - 130px); overflow-y: auto; }
       body.menu #menu-ui { display: flex; }
       #menu-ui #menu-list { display: flex; flex-direction: column; gap: 8px; width: min(420px, 92vw); }
+      #menu-ui #menu-mine { display: flex; flex-direction: column; gap: 8px; width: min(420px, 92vw); }
+      #menu-ui #menu-sect { color: #aaaacc; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-top: 6px; }
+      #menu-ui #menu-auth, #menu-ui #menu-pinrow { display: flex; gap: 6px; align-items: center; width: min(420px, 92vw); flex-wrap: wrap; justify-content: center; }
+      #menu-ui input[type="text"], #menu-ui input[type="email"], #menu-ui input[type="password"] { font-size: 14px; color: #fff; background: #23233d;
+        border: 1px solid #55557a; border-radius: 6px; padding: 7px 10px; min-width: 0; }
+      #menu-ui #menu-pin-err, #menu-ui .bad { color: #ff8888; font-size: 12px; }
       #menu-ui .menu-row { display: flex; gap: 6px; align-items: center; background: #23233d;
         border: 1px solid #44446a; border-radius: 8px; padding: 8px 10px; }
       #menu-ui .menu-row .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -105,6 +112,15 @@
       </div>
     </div>
     <div id="menu-ui" aria-label="Niveles guardados">
+      <div id="menu-auth"></div>
+      <div id="menu-pinrow">
+        <input type="text" id="menu-pin" maxlength="9" placeholder="PIN XXXX-XXXX" aria-label="PIN de nivel" />
+        <button type="button" id="menu-pin-go">Buscar</button>
+        <span id="menu-pin-err"></span>
+      </div>
+      <div id="menu-sect">Mis niveles (servidor)</div>
+      <div id="menu-mine"></div>
+      <div id="menu-sect">En este dispositivo</div>
       <div id="menu-list"></div>
       <div id="menu-empty" style="display: none">Sin niveles guardados — creá uno.</div>
       <button type="button" id="menu-new" class="primary">Nuevo nivel</button>
@@ -190,6 +206,7 @@
       <div class="row">
         <button type="button" id="ed-validate">Validar</button>
         <button type="button" id="ed-save">Guardar</button>
+        <button type="button" id="ed-publish">Publicar</button>
       </div>
       <div class="row">
         <button type="button" id="ed-export">Exportar</button>

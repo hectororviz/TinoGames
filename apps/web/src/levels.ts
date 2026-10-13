@@ -5,6 +5,9 @@ export interface SavedLevel {
   name: string;
   updatedAt: number;
   level: Level;
+  /** Id y PIN en el servidor (si se publicó). */
+  remoteId?: string;
+  pin?: string;
 }
 
 export interface EditorData {
@@ -81,10 +84,23 @@ export function updateLevel(id: string, name: string, level: Level): SavedLevel 
   const idx = entries.findIndex((e) => e.id === id);
   if (idx < 0) throw new Error('Nivel no encontrado');
   const clean = checkName(name, entries, id);
+  const prev = entries[idx];
   const entry: SavedLevel = { id, name: clean, updatedAt: Date.now(), level: cloneLevel(level) };
+  if (prev.remoteId) entry.remoteId = prev.remoteId;
+  if (prev.pin) entry.pin = prev.pin;
   entries[idx] = entry;
   persist(entries);
   return entry;
+}
+
+export function setRemote(id: string, remoteId: string, pin: string): void {
+  const entries = listLevels();
+  const entry = entries.find((e) => e.id === id);
+  if (!entry) return;
+  entry.remoteId = remoteId;
+  entry.pin = pin;
+  entry.updatedAt = Date.now();
+  persist(entries);
 }
 
 export function deleteLevel(id: string): void {
@@ -93,4 +109,33 @@ export function deleteLevel(id: string): void {
 
 export function findLevel(id: string): SavedLevel | undefined {
   return listLevels().find((e) => e.id === id);
+}
+
+export function importRemote(title: string, remoteId: string, pin: string, level: Level): SavedLevel {
+  const entries = listLevels();
+  const existing = entries.find((e) => e.remoteId === remoteId);
+  if (existing) {
+    const clean = `${title}`;
+    const clash = entries.some((e) => e.id !== existing.id && e.name.trim().toLowerCase() === clean.toLowerCase());
+    existing.name = clash ? `${clean} (${pin})` : clean;
+    existing.level = cloneLevel(level);
+    existing.remoteId = remoteId;
+    existing.pin = pin;
+    existing.updatedAt = Date.now();
+    persist(entries);
+    return existing;
+  }
+  const clean = title.trim() || 'Sin titulo';
+  const clash = entries.some((e) => e.name.trim().toLowerCase() === clean.toLowerCase());
+  const entry: SavedLevel = {
+    id: makeId(),
+    name: clash ? `${clean} (${pin})` : clean,
+    updatedAt: Date.now(),
+    level: cloneLevel(level),
+    remoteId,
+    pin,
+  };
+  entries.push(entry);
+  persist(entries);
+  return entry;
 }
