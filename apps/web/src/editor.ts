@@ -381,7 +381,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private bindUi(): void {
-    const tools = document.querySelectorAll<HTMLElement>('#ed-tools [data-tool]');
+    const tools = document.querySelectorAll<HTMLElement>('#editor-ui [data-tool]');
     tools.forEach((btn) => {
       btn.onclick = () => {
         const next = btn.getAttribute('data-tool') as Tool | null;
@@ -483,7 +483,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private refreshToolHighlight(): void {
-    const tools = document.querySelectorAll<HTMLElement>('#ed-tools [data-tool]');
+    const tools = document.querySelectorAll<HTMLElement>('#editor-ui [data-tool]');
     tools.forEach((btn) => {
       btn.classList.toggle('active', btn.getAttribute('data-tool') === this.tool);
     });
