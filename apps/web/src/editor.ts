@@ -1,13 +1,22 @@
 import Phaser from 'phaser';
 import { validateLevel } from '@tinogames/level-schema';
 import type { Entity, Level } from '@tinogames/level-schema';
+import {
+  blankLevel,
+  cloneLevel,
+  createLevel,
+  deleteLevel,
+  findLevel,
+  listLevels,
+  updateLevel,
+} from './levels.js';
+import type { EditorData } from './levels.js';
 import tilesPaUrl from '../../../assets/tiles_pa.png?url';
 import vendorSpikeUrl from '../../../assets/vendor_pa_spike.png?url';
 import pinkUrl from '../../../assets/pink.png?url';
 import appleUrl from '../../../assets/Apple.png?url';
 
 const T = 16;
-const STORAGE_KEY = 'tinogames-level';
 /** Distancia en px de pantalla para distinguir click (pintar) de drag (pan). */
 const DRAG_THRESHOLD = 6;
 
@@ -21,6 +30,9 @@ function el(id: string): HTMLElement {
 
 export class EditorScene extends Phaser.Scene {
   private level!: Level;
+  private openId: string | undefined;
+  private pendingName = '';
+  private dirty = false;
   private tool: Tool = 'ground';
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private sprites: Phaser.GameObjects.GameObject[] = [];
@@ -35,13 +47,27 @@ export class EditorScene extends Phaser.Scene {
     super('editor');
   }
 
-  create(): void {
+  create(data?: EditorData): void {
     document.body.classList.add('editing');
     document.body.classList.remove('playing');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       document.body.classList.remove('editing');
     });
-    this.level = this.loadLevel();
+    if (data?.draft) {
+      this.level = cloneLevel(data.draft);
+      this.openId = data.openId;
+      this.pendingName = data.name ?? '';
+    } else if (data?.openId) {
+      const entry = findLevel(data.openId);
+      this.level = entry ? cloneLevel(entry.level) : blankLevel();
+      this.openId = entry?.id;
+      this.pendingName = entry?.name ?? '';
+    } else {
+      this.level = blankLevel();
+      this.openId = undefined;
+      this.pendingName = '';
+    }
+    this.dirty = false;
     this.cameras.main.setBackgroundColor('#1a1a2e');
     this.lastGridKey = '';
     this.painting = false;
@@ -128,21 +154,79 @@ export class EditorScene extends Phaser.Scene {
     }
   }
 
-  private loadLevel(): Level {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as Level;
-        if (parsed.format === 2) return parsed;
-      }
-    } catch {
-      // ignorar
+  private saveLevel(): void {
+    const name = (document.getElementById('ed-name') as HTMLInputElement | null)?.value ?? '';
+    if (this.openId) {
+      const entry = updateLevel(this.openId, name, this.level);
+      this.openId = entry.id;
+      this.pendingName = entry.name;
+    } else {
+      const entry = createLevel(name, this.level);
+      this.openId = entry.id;
+      this.pendingName = entry.name;
     }
-    return { format: 2, game: '0.2', theme: 'pixel-adventure', tiles: [], entities: [] };
+    this.dirty = false;
+    this.syncNameInput();
+    this.refreshOpenList();
   }
 
-  private saveLevel(): void {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.level));
+  private syncNameInput(): void {
+    const input = document.getElementById('ed-name') as HTMLInputElement | null;
+    if (input) input.value = this.pendingName;
+  }
+
+  private refreshOpenList(): void {
+    const select = document.getElementById('ed-open') as HTMLSelectElement | null;
+    if (!select) return;
+    select.textContent = '';
+    const hint = document.createElement('option');
+    hint.value = '';
+    hint.textContent = 'Abrir…';
+    select.appendChild(hint);
+    for (const e of listLevels()) {
+      const opt = document.createElement('option');
+      opt.value = e.id;
+      opt.textContent = e.name;
+      if (e.id === this.openId) opt.selected = true;
+      select.appendChild(opt);
+    }
+    if (!this.openId) select.value = '';
+  }
+
+  private openEntry(id: string): void {
+    if (!id) return;
+    if (!this.confirmDiscard()) return;
+    const entry = findLevel(id);
+    if (!entry) return;
+    this.openId = entry.id;
+    this.pendingName = entry.name;
+    this.level = cloneLevel(entry.level);
+    this.dirty = false;
+    this.lastPaintKey = '';
+    this.centerCamera();
+    this.renderLevel();
+    this.syncNameInput();
+    this.refreshOpenList();
+    this.updateStatus();
+  }
+
+  private newDraft(): void {
+    if (!this.confirmDiscard()) return;
+    this.openId = undefined;
+    this.pendingName = '';
+    this.level = blankLevel();
+    this.dirty = false;
+    this.lastPaintKey = '';
+    this.centerCamera();
+    this.renderLevel();
+    this.syncNameInput();
+    this.refreshOpenList();
+    this.updateStatus();
+  }
+
+  private confirmDiscard(): boolean {
+    if (!this.dirty) return true;
+    return confirm('Cambios sin guardar. ¿Seguir igual?');
   }
 
   /** Redibuja la grid solo sobre el rectángulo visible (cubre bordes con zoom/pan). */
@@ -231,16 +315,40 @@ export class EditorScene extends Phaser.Scene {
 
     el('ed-validate').onclick = () => this.updateStatus();
     el('ed-save').onclick = () => {
-      this.saveLevel();
-      this.flashStatus('Nivel guardado', true);
+      try {
+        this.saveLevel();
+        this.flashStatus(`Nivel "${this.pendingName}" guardado`, true);
+      } catch (err) {
+        this.flashStatus(err instanceof Error ? err.message : 'No se pudo guardar', false);
+      }
     };
     el('ed-export').onclick = () => this.exportLevel();
     el('ed-import').onclick = () => this.importLevel();
     el('ed-test').onclick = () => this.testLevel();
     el('ed-exit').onclick = () => {
-      this.saveLevel();
+      if (!this.confirmDiscard()) return;
       this.scene.start('menu');
     };
+    const openSelect = document.getElementById('ed-open') as HTMLSelectElement | null;
+    if (openSelect) {
+      openSelect.onchange = () => {
+        this.openEntry(openSelect.value);
+        openSelect.blur();
+      };
+    }
+    el('ed-new').onclick = () => this.newDraft();
+    el('ed-delete').onclick = () => {
+      if (!this.openId) {
+        this.flashStatus('Nada que borrar: abrí un nivel guardado', false);
+        return;
+      }
+      if (!confirm(`¿Borrar "${this.pendingName}"?`)) return;
+      deleteLevel(this.openId);
+      this.newDraft();
+      this.flashStatus('Nivel borrado', true);
+    };
+    this.syncNameInput();
+    this.refreshOpenList();
   }
 
   private refreshToolHighlight(): void {
@@ -295,6 +403,7 @@ export class EditorScene extends Phaser.Scene {
           const level = JSON.parse(reader.result as string) as Level;
           if (level.format === 2) {
             this.level = level;
+            this.dirty = true;
             this.centerCamera();
             this.renderLevel();
             this.updateStatus();
@@ -317,8 +426,12 @@ export class EditorScene extends Phaser.Scene {
       this.flashStatus('Corrige los errores antes de probar', false);
       return;
     }
-    this.saveLevel();
-    this.scene.start('game', { level: this.level, fromEditor: true });
+    this.scene.start('game', {
+      level: cloneLevel(this.level),
+      fromEditor: true,
+      openId: this.openId,
+      name: (document.getElementById('ed-name') as HTMLInputElement | null)?.value ?? this.pendingName,
+    });
   }
 
   private setupInput(): void {
@@ -393,6 +506,7 @@ export class EditorScene extends Phaser.Scene {
     } else {
       this.paintEntity(tileX, tileY);
     }
+    this.dirty = true;
     this.renderLevel();
     this.updateStatus();
   }

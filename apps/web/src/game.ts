@@ -74,9 +74,11 @@ export class GameScene extends Phaser.Scene {
 
   private currentLevel!: Level;
   private fromEditor = false;
+  private openId: string | undefined;
+  private levelName = '';
   private keyE!: Phaser.Input.Keyboard.Key;
 
-  create(data?: { level?: Level; fromEditor?: boolean }): void {
+  create(data?: { level?: Level; fromEditor?: boolean; openId?: string; name?: string }): void {
     document.body.classList.add('playing');
     document.body.classList.remove('editing');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -85,11 +87,18 @@ export class GameScene extends Phaser.Scene {
     const level = data?.level ?? sampleLevel as Level;
     this.currentLevel = level;
     this.fromEditor = data?.fromEditor ?? false;
+    this.openId = data?.openId;
+    this.levelName = data?.name ?? '';
     document.body.classList.toggle('from-editor', this.fromEditor);
     const backBtn = document.getElementById('game-back');
     if (backBtn) {
+      backBtn.textContent = this.fromEditor ? '← Editor' : '← Menú';
       backBtn.onclick = () => {
-        this.scene.start('editor');
+        if (this.fromEditor) {
+          this.scene.start('editor', { openId: this.openId, draft: this.currentLevel, name: this.levelName });
+        } else {
+          this.scene.start('menu');
+        }
       };
     }
     assertValidLevel(level);
@@ -330,11 +339,11 @@ export class GameScene extends Phaser.Scene {
   override update(_time: number, deltaMs: number): void {
     const delta = Math.min(deltaMs / 1000, 0.05);
     if (Phaser.Input.Keyboard.JustDown(this.keyR)) {
-      this.scene.restart({ level: this.currentLevel, fromEditor: this.fromEditor });
+      this.scene.restart({ level: this.currentLevel, fromEditor: this.fromEditor, openId: this.openId, name: this.levelName });
       return;
     }
     if (this.fromEditor && Phaser.Input.Keyboard.JustDown(this.keyE)) {
-      this.scene.start('editor');
+      this.scene.start('editor', { openId: this.openId, draft: this.currentLevel, name: this.levelName });
       return;
     }
 

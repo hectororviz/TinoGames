@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import sampleLevel from '@tinogames/level-schema/levels/sample-level-1.json';
-import type { Level } from '@tinogames/level-schema';
+import { validateLevel } from '@tinogames/level-schema';
+import { deleteLevel, listLevels } from './levels.js';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -8,54 +8,78 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    document.body.classList.add('menu');
     document.body.classList.remove('playing', 'editing');
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      document.body.classList.remove('menu');
+    });
     this.cameras.main.setBackgroundColor('#1a1a2e');
 
     this.add
-      .text(240, 60, 'TinoGames', {
+      .text(240, 40, 'TinoGames', {
         fontSize: '32px',
         color: '#ffffff',
         fontStyle: 'bold',
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5, 0);
 
     this.add
-      .text(240, 100, 'Plataformas 2D con editor de niveles', {
+      .text(240, 76, 'Elegí un nivel para jugar o crear', {
         fontSize: '13px',
         color: '#aaaacc',
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5, 0);
 
-    const playBtn = this.add
-      .text(240, 150, '  Jugar  ', {
-        fontSize: '20px',
-        color: '#ffffff',
-        backgroundColor: '#4a9eff',
-        padding: { x: 16, y: 10 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
+    this.renderList();
+    document.getElementById('menu-new')!.onclick = () => {
+      this.scene.start('editor', {});
+    };
+  }
 
-    playBtn.on('pointerover', () => playBtn.setStyle({ backgroundColor: '#6ab0ff' }));
-    playBtn.on('pointerout', () => playBtn.setStyle({ backgroundColor: '#4a9eff' }));
-    playBtn.on('pointerdown', () => {
-      this.scene.start('game', { level: sampleLevel as Level });
-    });
-
-    const editorBtn = this.add
-      .text(240, 200, '  Editor  ', {
-        fontSize: '20px',
-        color: '#ffffff',
-        backgroundColor: '#555555',
-        padding: { x: 16, y: 10 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
-
-    editorBtn.on('pointerover', () => editorBtn.setStyle({ backgroundColor: '#777777' }));
-    editorBtn.on('pointerout', () => editorBtn.setStyle({ backgroundColor: '#555555' }));
-    editorBtn.on('pointerdown', () => {
-      this.scene.start('editor');
-    });
+  private renderList(): void {
+    const box = document.getElementById('menu-list')!;
+    box.textContent = '';
+    const entries = listLevels().sort((a, b) => b.updatedAt - a.updatedAt);
+    document.getElementById('menu-empty')!.style.display = entries.length === 0 ? 'block' : 'none';
+    for (const entry of entries) {
+      const valid = validateLevel(entry.level).length === 0;
+      const row = document.createElement('div');
+      row.className = 'menu-row';
+      const nm = document.createElement('span');
+      nm.className = 'nm';
+      nm.textContent = entry.name;
+      row.appendChild(nm);
+      if (!valid) {
+        const bad = document.createElement('span');
+        bad.className = 'bad';
+        bad.textContent = 'inválido';
+        row.appendChild(bad);
+      }
+      const play = document.createElement('button');
+      play.type = 'button';
+      play.textContent = 'Jugar';
+      play.disabled = !valid;
+      play.onclick = () => {
+        this.scene.start('game', { level: entry.level });
+      };
+      row.appendChild(play);
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.textContent = 'Editar';
+      edit.onclick = () => {
+        this.scene.start('editor', { openId: entry.id });
+      };
+      row.appendChild(edit);
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.textContent = 'Borrar';
+      del.onclick = () => {
+        if (!confirm(`¿Borrar "${entry.name}"?`)) return;
+        deleteLevel(entry.id);
+        this.renderList();
+      };
+      row.appendChild(del);
+      box.appendChild(row);
+    }
   }
 }
