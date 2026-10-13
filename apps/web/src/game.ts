@@ -193,6 +193,7 @@ export class GameScene extends Phaser.Scene {
     this.exitZone = null;
     this.hp = FEEL.maxHp;
     this.gems = 0;
+    this.gemsTotal = 0;
     this.won = false;
 
     // Fondo.
