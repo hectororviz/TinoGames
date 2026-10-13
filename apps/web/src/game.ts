@@ -131,10 +131,10 @@ export class GameScene extends Phaser.Scene {
       switch (e.kind) {
         case 'player_start': {
           this.startX = cx;
-          // El body mide 18x28 (mitad 14px): spawnear al centro del tile deja
-          // los pies 6px dentro del piso. Se apoya 1px arriba del solido.
+          // El body mide 14x26 (mitad 13px): se apoya 1px arriba del solido
+          // para no spawnear embebido.
           const floorBelow = level.tiles.some((t) => t.t === 'ground' && t.x === e.x && t.y === e.y + 1);
-          this.startY = floorBelow ? (e.y + 1) * T - 15 : cy;
+          this.startY = floorBelow ? (e.y + 1) * T - 14 : cy;
           break;
         }
         case 'item': {
@@ -148,7 +148,10 @@ export class GameScene extends Phaser.Scene {
         }
         case 'walker': {
           const props = (e.props ?? {}) as { range?: number; speed?: number };
-          const spr = this.physics.add.sprite(cx, cy, 'walker');
+          // Textura 28x28 (mitad 14px): apoyar 1px arriba si hay piso debajo,
+          // igual que el player, para no spawnear embebido y caerse.
+          const wFloor = level.tiles.some((t) => t.t === 'ground' && t.x === e.x && t.y === e.y + 1);
+          const spr = this.physics.add.sprite(cx, wFloor ? (e.y + 1) * T - 15 : cy, 'walker');
           spr.setCollideWorldBounds(false);
           this.walkers.push({
             spr,
@@ -202,7 +205,7 @@ export class GameScene extends Phaser.Scene {
     // --- Player ---
     this.player = this.physics.add.sprite(this.startX, this.startY, 'pink', 0);
     this.player.setCollideWorldBounds(true);
-    (this.player.body as Phaser.Physics.Arcade.Body).setSize(18, 28);
+    (this.player.body as Phaser.Physics.Arcade.Body).setSize(14, 26);
     this.anims.create({ key: 'idle', frames: [{ key: 'pink', frame: 0 }], frameRate: 1, repeat: -1 });
     this.anims.create({ key: 'run', frames: [{ key: 'pink', frame: 1 }, { key: 'pink', frame: 2 }], frameRate: 8, repeat: -1 });
     this.anims.create({ key: 'jump', frames: [{ key: 'pink', frame: 3 }], frameRate: 1, repeat: -1 });

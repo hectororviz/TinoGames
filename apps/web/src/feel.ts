@@ -5,7 +5,7 @@
 export const FEEL = {
   tile: 16,
   speed: 110,
-  jumpVelocity: 280,
+  jumpVelocity: 320,
   doubleJumpMult: 0.9,
   gravity: 700,
   coyoteTime: 0.1,
