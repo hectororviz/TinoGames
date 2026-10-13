@@ -1,0 +1,6 @@
+{
+  "name": "@tinogames/themes",
+  "version": "0.1.0",
+  "description": "Packs visuales TinoGames: el nivel dice QUE es, el tema dice COMO se ve.",
+  "type": "module"
+}

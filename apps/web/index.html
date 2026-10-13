@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#87b5e8" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>TinoGames</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #87b5e8; overscroll-behavior: none; }
+      #app { display: flex; align-items: center; justify-content: center; height: 100%; }
+      #touch { position: fixed; inset: auto 0 0 0; display: flex; justify-content: space-between; padding: 12px; pointer-events: none; }
+      #touch .grp { display: flex; gap: 12px; }
+      #touch button { pointer-events: auto; width: 64px; height: 64px; font-size: 24px; border-radius: 50%; border: none; opacity: 0.65; touch-action: none; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="touch">
+      <div class="grp">
+        <button id="btn-left">◀</button>
+        <button id="btn-right">▶</button>
+      </div>
+      <div class="grp">
+        <button id="btn-jump">A</button>
+        <button id="btn-dash">B</button>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

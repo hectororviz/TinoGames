@@ -1,0 +1,106 @@
+import type { Entity, Level } from './types.js';
+
+export interface ValidationError {
+  code: string;
+  message: string;
+}
+
+function isInt(n: unknown): n is number {
+  return typeof n === 'number' && Number.isInteger(n);
+}
+
+function solidAt(solids: Set<string>, x: number, y: number): boolean {
+  return solids.has(`${x},${y}`);
+}
+
+/**
+ * Valida un nivel v2. Reglas:
+ * - 1 player_start y 1 exit.
+ * - player_start / walker / exit con tile solido (ground) justo debajo.
+ * - flyer / item en el aire (la celda y la de abajo no son solidas).
+ * - spikes como tramo (piso) o columna (pared): al menos una dimension >= 1
+ *   y apoyado en solido o adosado a solido lateral.
+ */
+export function validateLevel(level: Level): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const fail = (code: string, message: string) => errors.push({ code, message });
+
+  if (typeof level !== 'object' || level === null) {
+    return [{ code: 'not-object', message: 'level must be an object' }];
+  }
+  if (level.format !== 2) fail('format', 'level.format must be 2');
+  if (typeof level.game !== 'string' || level.game.length === 0) {
+    fail('game', 'level.game must be a non-empty string');
+  }
+  if (typeof level.theme !== 'string' || level.theme.length === 0) {
+    fail('theme', 'level.theme must be a non-empty string');
+  }
+  if (!Array.isArray(level.tiles)) fail('tiles', 'level.tiles must be an array');
+  if (!Array.isArray(level.entities)) fail('entities', 'level.entities must be an array');
+  if (errors.length > 0) return errors;
+
+  const solids = new Set<string>();
+  for (const t of level.tiles) {
+    if (!isInt(t.x) || !isInt(t.y) || typeof t.t !== 'string') {
+      fail('tile-shape', `bad tile shape: ${JSON.stringify(t)}`);
+      continue;
+    }
+    if (t.t === 'ground') solids.add(`${t.x},${t.y}`);
+  }
+
+  const byKind = (kind: string): Entity[] => level.entities.filter((e) => e.kind === kind);
+  const starts = byKind('player_start');
+  const exits = byKind('exit');
+  if (starts.length !== 1) fail('player-start', `need exactly 1 player_start, found ${starts.length}`);
+  if (exits.length !== 1) fail('exit', `need exactly 1 exit, found ${exits.length}`);
+
+  for (const e of level.entities) {
+    if (!isInt(e.x) || !isInt(e.y) || typeof e.kind !== 'string') {
+      fail('entity-shape', `bad entity shape: ${JSON.stringify(e)}`);
+      continue;
+    }
+    switch (e.kind) {
+      case 'player_start':
+      case 'walker':
+      case 'exit':
+        if (!solidAt(solids, e.x, e.y + 1)) {
+          fail('needs-ground', `${e.kind} at (${e.x},${e.y}) needs ground below`);
+        }
+        if (solidAt(solids, e.x, e.y)) {
+          fail('inside-solid', `${e.kind} at (${e.x},${e.y}) is inside solid`);
+        }
+        break;
+      case 'flyer':
+      case 'item':
+        if (solidAt(solids, e.x, e.y)) {
+          fail('inside-solid', `${e.kind} at (${e.x},${e.y}) is inside solid`);
+        }
+        break;
+      case 'spikes': {
+        const w = Math.max(1, Math.floor((e.props as { w?: number } | undefined)?.w ?? 1));
+        const h = Math.max(1, Math.floor((e.props as { h?: number } | undefined)?.h ?? 1));
+        let ok = false;
+        for (let dx = 0; dx < w && !ok; dx++) {
+          if (solidAt(solids, e.x + dx, e.y + h)) ok = true;
+        }
+        for (let dy = 0; dy < h && !ok; dy++) {
+          if (solidAt(solids, e.x - 1, e.y + dy) || solidAt(solids, e.x + w, e.y + dy)) ok = true;
+        }
+        if (!ok) fail('spikes-support', `spikes at (${e.x},${e.y}) need floor below or wall beside`);
+        break;
+      }
+      default:
+        // Kinds futuros: solo forma valida, sin reglas.
+        break;
+    }
+  }
+
+  return errors;
+}
+
+export function assertValidLevel(level: Level): void {
+  const errors = validateLevel(level);
+  if (errors.length > 0) {
+    throw new Error(`invalid level: ${errors.map((e) => e.message).join('; ')}`);
+  }
+}

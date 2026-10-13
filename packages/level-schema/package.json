@@ -1,0 +1,25 @@
+{
+  "name": "@tinogames/level-schema",
+  "version": "0.1.0",
+  "description": "Formato canonico de niveles TinoGames v2: tipos + validador.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./levels/*.json": "./levels/*.json"
+  },
+  "files": ["dist", "levels"],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

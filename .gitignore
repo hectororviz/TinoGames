@@ -1,15 +1,24 @@
-# Godot 4
+# Dependencias y builds
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Vite
+apps/web/dist/
+apps/web/.vite/
+
+# Env y datos locales
+.env
+.env.local
+data/
+
+# Godot legacy (no volver)
 .godot/
-*.godot.tmp
-
-# Export locales
-*.keystore
-*.jks
-android/build/
-android/.gradle/
-
-# Salidas de export (binarios locales, no versionar)
+*.import
 builds/
+
+# Generado por assets/gen_art.py que ya no se versiona
+assets/kid.png
 
 # Sistema
 .DS_Store

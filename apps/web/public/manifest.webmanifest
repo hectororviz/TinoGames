@@ -1,0 +1,9 @@
+{
+  "name": "TinoGames",
+  "short_name": "TinoGames",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#87b5e8",
+  "theme_color": "#87b5e8",
+  "description": "Plataformas 2D con editor de niveles."
+}

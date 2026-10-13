@@ -1,0 +1,21 @@
+{
+  "name": "@tinogames/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TinoGames web: juego + editor (misma pagina).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tinogames/level-schema": "workspace:*",
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vite": "^7.0.0"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "tinogames",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TinoGames: plataformas 2D con editor web (Phaser + TypeScript).",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "install:all": "pnpm install",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "build": "pnpm -r --if-present build",
+    "dev:web": "pnpm --filter @tinogames/web dev",
+    "dev:server": "pnpm --filter @tinogames/server dev",
+    "gen:art": "python3 assets/gen_art.py"
+  }
+}

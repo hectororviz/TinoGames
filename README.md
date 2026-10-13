@@ -1,35 +1,22 @@
-# Jueguito (prototipo con Valentino)
+# TinoGames
 
-Plataformas 2D cartoon para Android. Godot 4.7. Estado: vertical slice
-(menú con el héroe en portada + una pantalla jugable).
-
-## Abrir y probar
-
-1. Godot 4.7 → Importar → `jueguito/project.godot`.
-2. F5 → menú → JUGAR (o Enter).
-3. PC: **A/D o flechas** moverse, **Espacio** saltar (doble), **J** dash, **R** reiniciar.
-4. Táctil: ◀ ▶ + A (salta) + B (dash). El chancho sale 3s después: ¡corré!
-5. Hitos M1/M2/M3/M5 para reportar ("en M3 los escalones...").
-6. 6 frutas, 2 tiras de pinchos, 3 corazones, meta al este.
-
-## Exportar a Android
-
-Preset `Android (debug)` listo. Requiere plantillas 4.7 + SDK (ver `docs/LECCIONES.md`).
-Salida: `../builds/jueguito-debug.apk` (ignorado en git).
+Plataformas 2D con editor de niveles web. Phaser + TypeScript, web-first.
+El juego, el editor y las cuentas viven en el mismo monorepo.
 
 ## Estructura
 
-- `scenes/menu.tscn` — portada: héroe flotando + JUGAR/Salir.
-- `scenes/main.tscn` — pantalla: suelo, 2 plataformas, foso, M1–M3, táctil.
-- `scenes/player.tscn` — héroe (correr/saltar/dash, coyote + buffer).
-- `scripts/` — un script por escena, sin autoloads todavía.
-- `art/` — kid reemplazado por Pink Man (`pink.png`); terreno, manzanas y
-  frutillas de Pixel Adventure (ver `art/CREDITS_PIXELADVENTURE.md`).
-- `docs/MAPA.txt` — el nivel en texto, para diseñar hablando.
-- `docs/LECCIONES.md` — lo aprendido en el proyecto anterior.
+- `apps/web/` — juego + editor (Vite + Phaser). `pnpm dev:web`.
+- `packages/level-schema/` — formato canónico de niveles v2 (tipos + validador).
+- `packages/themes/` — packs visuales (el nivel dice QUÉ, el tema dice CÓMO).
+- `server/` — API (Fastify + Postgres). `pnpm dev:server` (requiere `DATABASE_URL`).
+- `assets/` — arte migrado del prototipo + `gen_art.py`.
+- `docs/` — decisiones y referencias.
 
-## Reglas
+## Empezar
 
-1. Una pantalla linda antes que un nivel largo.
-2. Probar en teléfono antes de agregar contenido.
-3. El héroe de la portada es el mismo del juego (misma hoja `kid.png`).
+1. `pnpm install`
+2. Web: `pnpm dev:web` → http://localhost:5173 (flechas/A-D moverse, Espacio salta x2, J dash, R reinicia).
+3. API local: `docker compose up --build` → http://localhost:8080/health
+
+Nivel de ejemplo válido: `packages/level-schema/levels/sample-level-1.json`.
+Formato: JSON v2 disperso, sin techo, versionado. Ver `ROADMAP.md`.
