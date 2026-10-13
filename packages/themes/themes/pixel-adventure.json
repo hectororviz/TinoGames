@@ -3,17 +3,19 @@
   "name": "Pixel Adventure",
   "tileSize": 16,
   "tiles": {
-    "ground": { "sheet": "tiles_pa.png", "tile": 16, "variants": "0-9 tiles_pa, 10+ vendor_pa_terrain" }
+    "ground": { "base": "tiles_pa.png", "extra": "vendor_pa_terrain.png", "variants": "0-9 base, 10+ extra" }
   },
   "entities": {
-    "player_start": { "sheet": "pink.png", "frame": 32, "anims": { "idle": [0], "run": [1, 2], "jump": [3], "fall": [4] } },
-    "item": [
-      { "sheet": "Apple.png", "frame": 32 },
-      { "sheet": "Strawberry.png", "frame": 32 }
-    ],
-    "walker": { "sheet": "pig_walk.png", "frame": 36, "anims": { "walk": [0, 15] } },
-    "flyer": { "sheet": "bluebird_flying.png", "frame": 32, "anims": { "fly": [0, 8] } },
-    "spikes": { "sheet": "vendor_pa_spike.png", "variants": { "saw": "saw_on.png", "fire": "fire_on.png" } },
-    "exit": { "sheet": "tiles_pa.png", "note": "puerta dedicada pendiente" }
+    "player_start": { "skins": ["pink", "frog", "mask", "guy"], "dir": "assets/chars/" },
+    "fruit": { "skins": ["apple", "strawberry", "bananas", "cherries", "kiwi", "melon", "orange", "pineapple"], "heal": 1 },
+    "gem": { "colors": ["purple", "blue", "red"], "required": "all" },
+    "item": { "note": "legado: cuenta como gema para abrir la salida" },
+    "walker": { "skins": ["pig", "chicken", "mushroom", "radish", "rino", "rock1", "rock2", "rock3", "slime", "snail", "trunk", "bunny", "chameleon", "fatbird", "turtle", "duck", "plant"], "dir": "assets/enemies/" },
+    "flyer": { "skins": ["bat", "bee", "bluebird", "ghost", "skull"], "dir": "assets/enemies/" },
+    "spikes": { "variants": ["spikes", "saw", "fire", "arrow", "rock", "spikehead", "trampoline"] },
+    "checkpoint": { "respawn": "last" },
+    "platform": { "axis": ["x", "fall"] },
+    "deco": { "skins": ["box1", "box2", "box3"] },
+    "exit": { "sheet": "end-idle/end-pressed", "note": "puerta End del pack" }
   }
 }

@@ -22,13 +22,21 @@
         background: #6f97c8; color: #e8f1fb; font-family: system-ui, sans-serif; font-size: 12px; }
       #ad-slot:empty { display: none; }
       @media (max-width: 600px) { #ad-slot { min-height: 60px; } }
-      #editor-ui { display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+      #editor-ui { display: none; position: fixed; top: 0; left: 0; bottom: 0; width: 224px; z-index: 10;
         background: #1a1a2e; color: #fff; font-family: system-ui, sans-serif;
-        font-size: 14px; padding: 6px 8px; user-select: none; }
+        font-size: 14px; padding: 8px; user-select: none; overflow-y: auto; }
       body.editing #editor-ui { display: block; }
       body.editing #touch { display: none; }
+      body.ed-collapsed #ed-panel { display: none; }
+      body.ed-collapsed #editor-ui { width: auto; bottom: auto; border-radius: 0 0 8px 0; }
+      #ed-collapse { width: 100%; margin-bottom: 6px; }
       #editor-ui .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-      #editor-ui .row + .row { margin-top: 6px; }
+      #editor-ui .row + .row, #editor-ui .grp + .grp, #editor-ui .grp + .row, #editor-ui .row + .grp { margin-top: 8px; }
+      #editor-ui .grp { display: flex; flex-direction: column; gap: 4px; background: #23233d;
+        border: 1px solid #33334d; border-radius: 8px; padding: 6px; }
+      #editor-ui .grp > label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #aaaacc; }
+      #editor-ui .grp .line { display: flex; gap: 6px; align-items: center; }
+      #editor-ui .grp .line select { flex: 1; min-width: 0; }
       #editor-ui button { font-size: 14px; line-height: 1; color: #fff; background: #33334d;
         border: 1px solid #55557a; border-radius: 6px; padding: 7px 10px; cursor: pointer; }
       #editor-ui button:hover { background: #44446a; }
@@ -102,43 +110,98 @@
       <button type="button" id="menu-new" class="primary">Nuevo nivel</button>
     </div>
     <nav id="editor-ui" aria-label="Editor de niveles">
+      <button type="button" id="ed-collapse" title="Mostrar/ocultar panel">☰ Editor</button>
+      <div id="ed-panel">
       <div class="row">
         <input type="text" id="ed-name" maxlength="60" placeholder="Nombre del nivel" aria-label="Nombre del nivel" />
+      </div>
+      <div class="row">
         <select id="ed-open" aria-label="Abrir nivel guardado"></select>
+      </div>
+      <div class="row">
         <button type="button" id="ed-new">Nuevo</button>
         <button type="button" id="ed-delete">Borrar</button>
       </div>
-      <div class="row" id="ed-tools">
-        <button type="button" data-tool="ground">Piso</button>
-        <button type="button" id="ed-tile-btn" title="Variante de piso"></button>
+      <div class="grp">
+        <label>Piso</label>
+        <div class="line">
+          <button type="button" data-tool="ground">Pintar</button>
+          <button type="button" id="ed-tile-btn" title="Variante de piso"></button>
+        </div>
         <div id="ed-tile-grid" hidden></div>
-        <button type="button" data-tool="erase">Borrar</button>
-        <button type="button" data-tool="player_start">Inicio</button>
-        <select id="ed-player" aria-label="Personaje">
-          <option value="pink">Pink Man</option>
-        </select>
-        <button type="button" data-tool="enemy">Enemigo</button>
-        <select id="ed-enemy" aria-label="Tipo de enemigo">
-          <option value="walker">Caminante</option>
-          <option value="flyer">Volador</option>
-        </select>
-        <button type="button" data-tool="item">Item</button>
-        <button type="button" data-tool="spikes">Obstáculo</button>
-        <select id="ed-obstacle" aria-label="Tipo de obstáculo">
-          <option value="spikes">Pinchos</option>
-          <option value="saw">Sierra</option>
-          <option value="fire">Fuego</option>
-        </select>
-        <button type="button" data-tool="exit">Salida</button>
+      </div>
+      <div class="grp">
+        <label>Personaje</label>
+        <div class="line">
+          <button type="button" data-tool="player_start">Inicio</button>
+          <select id="ed-player" aria-label="Personaje"></select>
+        </div>
+      </div>
+      <div class="grp">
+        <label>Enemigo</label>
+        <div class="line">
+          <button type="button" data-tool="enemy">Poner</button>
+          <select id="ed-enemy" aria-label="Tipo de enemigo"></select>
+        </div>
+      </div>
+      <div class="grp">
+        <label>Fruta (cura)</label>
+        <div class="line">
+          <button type="button" data-tool="fruit">Poner</button>
+          <select id="ed-fruit" aria-label="Fruta"></select>
+        </div>
+      </div>
+      <div class="grp">
+        <label>Gema (abre salida)</label>
+        <div class="line">
+          <button type="button" data-tool="gem">Poner</button>
+          <select id="ed-gem" aria-label="Gema"></select>
+        </div>
+      </div>
+      <div class="grp">
+        <label>Otros</label>
+        <div class="line">
+          <button type="button" data-tool="item">Item</button>
+          <button type="button" data-tool="checkpoint">Check</button>
+        </div>
+        <div class="line">
+          <button type="button" data-tool="platform">Plataf.</button>
+          <select id="ed-platform" aria-label="Plataforma">
+            <option value="x">Móvil</option>
+            <option value="fall">Se cae</option>
+          </select>
+        </div>
+        <div class="line">
+          <button type="button" data-tool="deco">Deco</button>
+          <select id="ed-deco" aria-label="Decoración"></select>
+        </div>
+        <div class="line">
+          <button type="button" data-tool="exit">Salida</button>
+          <button type="button" data-tool="erase">Borrar</button>
+        </div>
+      </div>
+      <div class="grp">
+        <label>Obstáculo</label>
+        <div class="line">
+          <button type="button" data-tool="spikes">Poner</button>
+          <select id="ed-obstacle" aria-label="Tipo de obstáculo"></select>
+        </div>
       </div>
       <div class="row">
         <button type="button" id="ed-validate">Validar</button>
         <button type="button" id="ed-save">Guardar</button>
+      </div>
+      <div class="row">
         <button type="button" id="ed-export">Exportar</button>
         <button type="button" id="ed-import">Importar</button>
+      </div>
+      <div class="row">
         <button type="button" id="ed-test">Probar</button>
         <button type="button" id="ed-exit">Menú</button>
+      </div>
+      <div class="row">
         <span id="ed-status"></span>
+      </div>
       </div>
     </nav>
     <button type="button" id="game-back">← Editor</button>

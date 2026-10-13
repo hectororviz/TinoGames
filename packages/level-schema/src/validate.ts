@@ -110,6 +110,22 @@ export function validateLevel(level: Level): ValidationError[] {
         break;
       case 'flyer':
       case 'item':
+      case 'fruit':
+      case 'gem':
+        if (solidAt(solids, e.x, e.y)) {
+          fail('inside-solid', `${e.kind} at (${e.x},${e.y}) is inside solid`);
+        }
+        break;
+      case 'checkpoint':
+        if (!solidAt(solids, e.x, e.y + 1)) {
+          fail('needs-ground', `checkpoint at (${e.x},${e.y}) needs ground below`);
+        }
+        if (solidAt(solids, e.x, e.y)) {
+          fail('inside-solid', `checkpoint at (${e.x},${e.y}) is inside solid`);
+        }
+        break;
+      case 'platform':
+      case 'deco':
         if (solidAt(solids, e.x, e.y)) {
           fail('inside-solid', `${e.kind} at (${e.x},${e.y}) is inside solid`);
         }
@@ -118,7 +134,15 @@ export function validateLevel(level: Level): ValidationError[] {
         const w = Math.max(1, Math.floor((e.props as { w?: number } | undefined)?.w ?? 1));
         const h = Math.max(1, Math.floor((e.props as { h?: number } | undefined)?.h ?? 1));
         const variant = (e.props as { variant?: unknown } | undefined)?.variant ?? 'spikes';
-        if (variant !== 'spikes' && variant !== 'saw' && variant !== 'fire') {
+        if (
+          variant !== 'spikes' &&
+          variant !== 'saw' &&
+          variant !== 'fire' &&
+          variant !== 'arrow' &&
+          variant !== 'rock' &&
+          variant !== 'spikehead' &&
+          variant !== 'trampoline'
+        ) {
           fail('spikes-variant', `bad spikes variant: ${JSON.stringify(variant)}`);
           break;
         }

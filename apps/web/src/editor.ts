@@ -2,6 +2,23 @@ import Phaser from 'phaser';
 import { validateLevel } from '@tinogames/level-schema';
 import type { Entity, Level } from '@tinogames/level-schema';
 import {
+  BG_BLUE,
+  CHAR_SKINS,
+  CHECKPOINT,
+  DECOS,
+  ENEMIES,
+  EXIT_DOOR,
+  FRUITS,
+  FRUIT_SHEETS,
+  GEMS,
+  OBSTACLES,
+  PLATFORMS,
+  TILES_BASE,
+  TILES_EXTRA,
+  TRAMP_IDLE,
+  type SheetDef,
+} from './catalog.js';
+import {
   blankLevel,
   cloneLevel,
   createLevel,
@@ -11,15 +28,6 @@ import {
   updateLevel,
 } from './levels.js';
 import type { EditorData } from './levels.js';
-import tilesPaUrl from '../../../assets/tiles_pa.png?url';
-import terrainPaUrl from '../../../assets/vendor_pa_terrain.png?url';
-import vendorSpikeUrl from '../../../assets/vendor_pa_spike.png?url';
-import pinkUrl from '../../../assets/pink.png?url';
-import appleUrl from '../../../assets/Apple.png?url';
-import pigWalkUrl from '../../../assets/pig_walk.png?url';
-import bluebirdUrl from '../../../assets/bluebird_flying.png?url';
-import sawUrl from '../../../assets/saw_on.png?url';
-import fireUrl from '../../../assets/fire_on.png?url';
 
 const T = 16;
 /** Distancia en px de pantalla para distinguir click (pintar) de drag (pan). */
@@ -28,14 +36,50 @@ const DRAG_THRESHOLD = 6;
 const TILE_VARIANTS = 252;
 const TERRAIN_COLS = 22;
 
-type Tool = 'ground' | 'player_start' | 'enemy' | 'item' | 'spikes' | 'exit' | 'erase';
-type EnemyKind = 'walker' | 'flyer';
-type ObstacleVariant = 'spikes' | 'saw' | 'fire';
+type Tool =
+  | 'ground'
+  | 'player_start'
+  | 'enemy'
+  | 'fruit'
+  | 'gem'
+  | 'item'
+  | 'checkpoint'
+  | 'platform'
+  | 'spikes'
+  | 'deco'
+  | 'exit'
+  | 'erase';
 
 function el(id: string): HTMLElement {
   const node = document.getElementById(id);
   if (!node) throw new Error(`missing #${id}`);
   return node;
+}
+
+function selectEl(id: string): HTMLSelectElement {
+  const node = document.getElementById(id);
+  if (!(node instanceof HTMLSelectElement)) throw new Error(`missing select #${id}`);
+  return node;
+}
+
+function fillSelect(sel: HTMLSelectElement, groups: { label?: string; options: { value: string; label: string }[] }[]): void {
+  sel.textContent = '';
+  for (const g of groups) {
+    const parent: HTMLOptGroupElement | HTMLSelectElement = g.label
+      ? (() => {
+          const og = document.createElement('optgroup');
+          og.label = g.label;
+          sel.appendChild(og);
+          return og;
+        })()
+      : sel;
+    for (const o of g.options) {
+      const opt = document.createElement('option');
+      opt.value = o.value;
+      opt.textContent = o.label;
+      parent.appendChild(opt);
+    }
+  }
 }
 
 export class EditorScene extends Phaser.Scene {
@@ -45,8 +89,13 @@ export class EditorScene extends Phaser.Scene {
   private dirty = false;
   private tool: Tool = 'ground';
   private tileVariant = 0;
-  private enemyKind: EnemyKind = 'walker';
-  private obstacle: ObstacleVariant = 'spikes';
+  private playerSkin = 'pink';
+  private enemySkin = 'pig';
+  private fruitSkin = 'apple';
+  private gemColor = 'purple';
+  private platformAxis = 'x';
+  private obstacle = 'spikes';
+  private decoSkin = 'box1';
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private sprites: Phaser.GameObjects.GameObject[] = [];
   private lastGridKey = '';
@@ -93,15 +142,29 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private loadSprites(): void {
-    this.load.spritesheet('tile', tilesPaUrl, { frameWidth: T, frameHeight: T });
-    this.load.spritesheet('terrain', terrainPaUrl, { frameWidth: T, frameHeight: T });
-    this.load.image('spike', vendorSpikeUrl);
-    this.load.spritesheet('pink', pinkUrl, { frameWidth: 32, frameHeight: 32 });
-    this.load.spritesheet('apple', appleUrl, { frameWidth: 32, frameHeight: 32 });
-    this.load.spritesheet('pig', pigWalkUrl, { frameWidth: 36, frameHeight: 30 });
-    this.load.spritesheet('bluebird', bluebirdUrl, { frameWidth: 32, frameHeight: 32 });
-    this.load.spritesheet('saw', sawUrl, { frameWidth: 38, frameHeight: 38 });
-    this.load.spritesheet('fire', fireUrl, { frameWidth: 16, frameHeight: 32 });
+    const sheets: SheetDef[] = [
+      { key: 'tile', url: TILES_BASE.url, fw: 16, fh: 16, frames: 10 },
+      { key: 'terrain', url: TILES_EXTRA.url, fw: 16, fh: 16, frames: 242 },
+      ...CHAR_SKINS.flatMap((c) => [c.idle]),
+      ...FRUIT_SHEETS,
+      ...ENEMIES.map((e) => e.tex),
+      ...OBSTACLES.flatMap((o) => (o.tex ? [o.tex] : [])),
+      CHECKPOINT.on,
+      PLATFORMS.mover,
+      PLATFORMS.faller,
+    ];
+    for (const s of sheets) {
+      this.load.spritesheet(s.key, s.url, { frameWidth: s.fw, frameHeight: s.fh });
+    }
+    this.load.image('spike', OBSTACLES[0].image!.url);
+    this.load.image('rock', OBSTACLES.find((o) => o.id === 'rock')!.image!.url);
+    this.load.image('spikehead', OBSTACLES.find((o) => o.id === 'spikehead')!.image!.url);
+    this.load.image(TRAMP_IDLE.key, TRAMP_IDLE.url);
+    for (const g of GEMS) this.load.image(g.key, g.url);
+    this.load.image(CHECKPOINT.off.key, CHECKPOINT.off.url);
+    this.load.image(EXIT_DOOR.idle.key, EXIT_DOOR.idle.url);
+    for (const d of DECOS) this.load.image(d.key, d.url);
+    this.load.image(BG_BLUE.key, BG_BLUE.url);
     this.load.once('complete', () => {
       this.makeTextures();
       this.setupScene();
@@ -110,8 +173,7 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private makeTextures(): void {
-    // Walker/flyer ahora son sprites reales (pig/bluebird). Solo la salida
-    // sigue generada. En revisitas las texturas ya existen.
+    // La salida sigue generada. En revisitas ya existe.
     if (this.textures.exists('exit')) return;
     const g = this.add.graphics();
     g.fillStyle(0xc084fc, 1).fillRect(0, 0, 16, 32);
@@ -248,6 +310,51 @@ export class EditorScene extends Phaser.Scene {
     for (let y = top; y <= bottom; y += T) g.lineBetween(left, y, right, y);
   }
 
+  private preview(kind: string, props?: Record<string, unknown>): { tex: string; frame?: number; h: number } {
+    switch (kind) {
+      case 'player_start': {
+        const skin = CHAR_SKINS.find((c) => c.id === props?.['skin']) ?? CHAR_SKINS[0];
+        return { tex: skin.idle.key, frame: 0, h: 16 };
+      }
+      case 'walker':
+      case 'flyer': {
+        const skin = ENEMIES.find((s) => s.id === props?.['skin'] && s.kind === kind)
+          ?? ENEMIES.find((s) => s.kind === kind)!;
+        return { tex: skin.tex.key, frame: 0, h: 18 };
+      }
+      case 'fruit': {
+        const f = FRUITS.find((x) => x.id === props?.['skin']) ?? FRUITS[0];
+        return { tex: f.key, frame: 0, h: 14 };
+      }
+      case 'gem': {
+        const gem = GEMS.find((x) => x.id === props?.['color']) ?? GEMS[0];
+        return { tex: gem.key, h: 14 };
+      }
+      case 'item':
+        return { tex: 'apple', frame: 0, h: 14 };
+      case 'checkpoint':
+        return { tex: CHECKPOINT.off.key, h: 24 };
+      case 'platform': {
+        const axis = props?.['axis'];
+        return { tex: axis === 'fall' ? PLATFORMS.faller.key : PLATFORMS.mover.key, frame: 0, h: 10 };
+      }
+      case 'spikes': {
+        const variant = (props?.['variant'] as string | undefined) ?? 'spikes';
+        const def = OBSTACLES.find((o) => o.id === variant) ?? OBSTACLES[0];
+        if (def.tex) return { tex: def.tex.key, frame: 0, h: def.id === 'saw' ? 22 : 18 };
+        return { tex: def.image!.key, h: 18 };
+      }
+      case 'deco': {
+        const d = DECOS.find((x) => x.id === props?.['skin']) ?? DECOS[0];
+        return { tex: d.key, h: 18 };
+      }
+      case 'exit':
+        return { tex: 'exit', h: 24 };
+      default:
+        return { tex: 'apple', frame: 0, h: 14 };
+    }
+  }
+
   private renderLevel(): void {
     for (const s of this.sprites) s.destroy();
     this.sprites = [];
@@ -261,48 +368,14 @@ export class EditorScene extends Phaser.Scene {
     }
 
     for (const entity of this.level.entities) {
-      let texture = 'apple';
-      let frame: number | undefined = 0;
-      switch (entity.kind) {
-        case 'player_start':
-          texture = 'pink';
-          frame = 0;
-          break;
-        case 'walker':
-          texture = 'pig';
-          frame = 0;
-          break;
-        case 'flyer':
-          texture = 'bluebird';
-          frame = 0;
-          break;
-        case 'item':
-          texture = 'apple';
-          frame = 0;
-          break;
-        case 'spikes': {
-          const variant = (entity.props as { variant?: string } | undefined)?.variant ?? 'spikes';
-          texture = variant === 'saw' ? 'saw' : variant === 'fire' ? 'fire' : 'spike';
-          frame = variant === 'spikes' ? undefined : 0;
-          break;
-        }
-        case 'exit':
-          texture = 'exit';
-          frame = undefined;
-          break;
-      }
       const cx = entity.x * T + T / 2;
       const cy = entity.y * T + T / 2;
-      const sprite = this.add.image(cx, cy, texture, frame);
+      const p = this.preview(entity.kind, entity.props as Record<string, unknown> | undefined);
+      const sprite = this.add.image(cx, cy, p.tex, p.frame);
       sprite.setOrigin(0.5, 0.5);
-      // Sprites grandes se escalan al tile de 16px para previsualizar.
-      if (texture === 'pink' || texture === 'apple' || texture === 'bluebird') {
-        sprite.setDisplaySize(T, T);
-      } else if (texture === 'pig') {
-        sprite.setDisplaySize(T * 1.2, T);
-      } else if (texture === 'saw') {
-        sprite.setDisplaySize(T * 1.5, T * 1.5);
-      }
+      const fh = this.textures.get(p.tex).getSourceImage() as { height?: number };
+      const scale = p.h / ((fh.height as number | undefined) ?? p.h);
+      sprite.setScale(scale);
       this.sprites.push(sprite);
     }
   }
@@ -322,26 +395,26 @@ export class EditorScene extends Phaser.Scene {
     this.buildTileGrid();
     this.refreshTileButton();
 
-    const enemySelect = document.getElementById('ed-enemy') as HTMLSelectElement | null;
-    if (enemySelect) {
-      enemySelect.value = this.enemyKind;
-      enemySelect.onchange = () => {
-        this.enemyKind = enemySelect.value === 'flyer' ? 'flyer' : 'walker';
-        this.tool = 'enemy';
+    const wire = (id: string, fn: (value: string) => void, current: () => string): void => {
+      const s = selectEl(id);
+      s.value = current();
+      s.onchange = () => {
+        fn(s.value);
         this.refreshToolHighlight();
       };
-    }
-    const obstacleSelect = document.getElementById('ed-obstacle') as HTMLSelectElement | null;
-    if (obstacleSelect) {
-      obstacleSelect.value = this.obstacle;
-      obstacleSelect.onchange = () => {
-        const v = obstacleSelect.value;
-        this.obstacle = v === 'saw' || v === 'fire' ? v : 'spikes';
-        this.tool = 'spikes';
-        this.refreshToolHighlight();
-      };
-    }
+    };
+    wire('ed-player', (v) => { this.playerSkin = v; this.tool = 'player_start'; }, () => this.playerSkin);
+    wire('ed-enemy', (v) => { this.enemySkin = v; this.tool = 'enemy'; }, () => this.enemySkin);
+    wire('ed-fruit', (v) => { this.fruitSkin = v; this.tool = 'fruit'; }, () => this.fruitSkin);
+    wire('ed-gem', (v) => { this.gemColor = v; this.tool = 'gem'; }, () => this.gemColor);
+    wire('ed-platform', (v) => { this.platformAxis = v; this.tool = 'platform'; }, () => this.platformAxis);
+    wire('ed-obstacle', (v) => { this.obstacle = v; this.tool = 'spikes'; }, () => this.obstacle);
+    wire('ed-deco', (v) => { this.decoSkin = v; this.tool = 'deco'; }, () => this.decoSkin);
+    this.fillCatalogSelects();
 
+    el('ed-collapse').onclick = () => {
+      document.body.classList.toggle('ed-collapsed');
+    };
     el('ed-validate').onclick = () => this.updateStatus();
     el('ed-save').onclick = () => {
       try {
@@ -380,6 +453,35 @@ export class EditorScene extends Phaser.Scene {
     this.refreshOpenList();
   }
 
+  private fillCatalogSelects(): void {
+    fillSelect(selectEl('ed-player'), [
+      { options: CHAR_SKINS.map((c) => ({ value: c.id, label: c.label })) },
+    ]);
+    fillSelect(selectEl('ed-enemy'), [
+      { label: 'Caminantes', options: ENEMIES.filter((e) => e.kind === 'walker').map((e) => ({ value: e.id, label: e.label })) },
+      { label: 'Voladores', options: ENEMIES.filter((e) => e.kind === 'flyer').map((e) => ({ value: e.id, label: e.label })) },
+    ]);
+    fillSelect(selectEl('ed-fruit'), [
+      { options: FRUITS.map((f) => ({ value: f.id, label: f.label })) },
+    ]);
+    fillSelect(selectEl('ed-gem'), [
+      { options: GEMS.map((g) => ({ value: g.id, label: g.label })) },
+    ]);
+    fillSelect(selectEl('ed-obstacle'), [
+      { options: OBSTACLES.map((o) => ({ value: o.id, label: o.label })) },
+    ]);
+    fillSelect(selectEl('ed-deco'), [
+      { options: DECOS.map((d) => ({ value: d.id, label: d.label })) },
+    ]);
+    selectEl('ed-player').value = this.playerSkin;
+    selectEl('ed-enemy').value = this.enemySkin;
+    selectEl('ed-fruit').value = this.fruitSkin;
+    selectEl('ed-gem').value = this.gemColor;
+    selectEl('ed-platform').value = this.platformAxis;
+    selectEl('ed-obstacle').value = this.obstacle;
+    selectEl('ed-deco').value = this.decoSkin;
+  }
+
   private refreshToolHighlight(): void {
     const tools = document.querySelectorAll<HTMLElement>('#ed-tools [data-tool]');
     tools.forEach((btn) => {
@@ -391,7 +493,7 @@ export class EditorScene extends Phaser.Scene {
   private tileThumb(v: number): Record<string, string> {
     if (v < 10) {
       return {
-        backgroundImage: `url("${tilesPaUrl}")`,
+        backgroundImage: `url("${TILES_BASE.url}")`,
         backgroundSize: '320px 32px',
         backgroundPosition: `-${v * 32}px 0`,
       };
@@ -400,7 +502,7 @@ export class EditorScene extends Phaser.Scene {
     const col = i % TERRAIN_COLS;
     const row = Math.floor(i / TERRAIN_COLS);
     return {
-      backgroundImage: `url("${terrainPaUrl}")`,
+      backgroundImage: `url("${TILES_EXTRA.url}")`,
       backgroundSize: '704px 352px',
       backgroundPosition: `-${col * 32}px -${row * 32}px`,
     };
@@ -614,30 +716,65 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private paintEntity(x: number, y: number): void {
-    const tool = this.tool;
-    const kind: Entity['kind'] =
-      tool === 'enemy' ? this.enemyKind : tool === 'spikes' ? 'spikes' : (tool as Entity['kind']);
+    let kind: Entity['kind'];
+    const props: Record<string, unknown> = {};
+    switch (this.tool) {
+      case 'player_start':
+        kind = 'player_start';
+        if (this.playerSkin !== 'pink') props['skin'] = this.playerSkin;
+        break;
+      case 'enemy': {
+        const skin = ENEMIES.find((s) => s.id === this.enemySkin) ?? ENEMIES[0];
+        kind = skin.kind;
+        props['skin'] = skin.id;
+        if (skin.kind === 'walker') {
+          props['range'] = skin.range ?? 4;
+          props['speed'] = skin.speed ?? 40;
+        }
+        break;
+      }
+      case 'fruit':
+        kind = 'fruit';
+        props['skin'] = this.fruitSkin;
+        break;
+      case 'gem':
+        kind = 'gem';
+        props['color'] = this.gemColor;
+        break;
+      case 'item':
+        kind = 'item';
+        break;
+      case 'checkpoint':
+        kind = 'checkpoint';
+        break;
+      case 'platform':
+        kind = 'platform';
+        props['axis'] = this.platformAxis;
+        props['range'] = 3;
+        props['speed'] = 50;
+        break;
+      case 'spikes':
+        kind = 'spikes';
+        if (this.obstacle !== 'spikes') props['variant'] = this.obstacle;
+        break;
+      case 'deco':
+        kind = 'deco';
+        props['skin'] = this.decoSkin;
+        break;
+      case 'exit':
+        kind = 'exit';
+        props['needsAllItems'] = true;
+        break;
+      default:
+        return;
+    }
     if (kind === 'player_start' || kind === 'exit') {
       this.level.entities = this.level.entities.filter((e) => e.kind !== kind);
     }
     this.level.entities = this.level.entities.filter((e) => !(e.x === x && e.y === y));
 
-    const entity: Entity = { kind, x, y };
-    switch (kind) {
-      case 'walker':
-        entity.props = { range: 4, speed: 40 };
-        break;
-      case 'flyer':
-        entity.props = { amp: 2, freq: 1.5 };
-        break;
-      case 'spikes':
-        if (this.obstacle !== 'spikes') entity.props = { variant: this.obstacle };
-        break;
-      case 'exit':
-        entity.props = { needsAllItems: true };
-        break;
-    }
-    this.level.entities.push(entity);
+    const entity: Entity = Object.keys(props).length > 0 ? { kind, x, y, props } : { kind, x, y };
+    this.level.entities.push(entity as Entity);
   }
 
   private eraseAt(x: number, y: number): void {

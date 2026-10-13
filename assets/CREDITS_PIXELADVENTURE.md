@@ -21,3 +21,10 @@ Regla: si se agrega más del pack (frutas, enemigos, fondos), se anota acá.
 - `bluebird_flying.png`: Blue Bird Flying, tira 288×32 (9 frames de 32×32). Flyer.
 - `saw_on.png`: sierra encendida, tira 304×38 (8 frames de 38×38). Obstáculo.
 - `fire_on.png`: fuego encendido, tira 48×32 (3 frames de 16×32). Obstáculo.
+
+## Pack completo (Pixel Adventure 1 + 2, CC0)
+Carpetas: `chars/` (4 personajes × idle/run/jump/fall), `fruits/` (6 frutas,
+más Apple/Strawberry en raíz), `gems/` (generadas propias: la gema no está en
+el pack), `enemies/` (20 enemigos), `traps/` (sierra, fuego, flecha,
+cabeza roca, cabeza pinchos, trampolín), `items/` (checkpoints, salida End,
+plataformas), `bg/` (7 fondos tileables 64px), `deco/` (3 cajas).

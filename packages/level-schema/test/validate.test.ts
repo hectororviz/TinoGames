@@ -20,6 +20,26 @@ describe('validateLevel', () => {
     expect(codes).toContain('player-start');
   });
 
+  it('accepts the new kinds with valid shape', () => {
+    const level = loadSample();
+    const ground = level.tiles.find((t) => t.t === 'ground')!;
+    level.entities.push(
+      { kind: 'fruit', x: ground.x, y: ground.y - 2 },
+      { kind: 'gem', x: ground.x, y: ground.y - 3 },
+      { kind: 'checkpoint', x: ground.x, y: ground.y - 1 },
+      { kind: 'platform', x: ground.x, y: ground.y - 4 },
+      { kind: 'deco', x: ground.x, y: ground.y - 1 },
+    );
+    expect(validateLevel(level)).toEqual([]);
+  });
+
+  it('rejects a checkpoint floating in the air', () => {
+    const level = loadSample();
+    level.entities.push({ kind: 'checkpoint', x: 3, y: 0 });
+    const codes = validateLevel(level).map((e) => e.code);
+    expect(codes).toContain('needs-ground');
+  });
+
   it('accepts ground tile variants', () => {
     const level = loadSample();
     level.tiles[0].v = 42;

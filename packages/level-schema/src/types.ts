@@ -23,17 +23,29 @@ export interface Tile {
 export type EntityKind =
   | 'player_start'
   | 'item'
+  | 'fruit'
+  | 'gem'
   | 'walker'
   | 'flyer'
   | 'spikes'
+  | 'checkpoint'
+  | 'platform'
+  | 'deco'
   | 'exit'
   | (string & {});
+
+export interface PlayerProps {
+  /** Skin del personaje: pink | frog | mask | guy. Por defecto pink. */
+  skin?: string;
+}
 
 export interface WalkerProps {
   /** Tiles a cada lado que patrulla. Por defecto 4. */
   range?: number;
   /** px/s. Por defecto 40. */
   speed?: number;
+  /** Skin del enemigo (id de la tabla del tema). Por defecto pig. */
+  skin?: string;
 }
 
 export interface FlyerProps {
@@ -41,6 +53,32 @@ export interface FlyerProps {
   amp?: number;
   /** Oscilaciones por segundo. Por defecto 1. */
   freq?: number;
+  /** Skin del enemigo (id de la tabla del tema). Por defecto bluebird. */
+  skin?: string;
+}
+
+export interface FruitProps {
+  /** Fruta: apple | strawberry | bananas | cherries | kiwi | melon | orange | pineapple. */
+  skin?: string;
+}
+
+export interface GemProps {
+  /** Color: purple | blue | red. Por defecto purple. */
+  color?: string;
+}
+
+export interface PlatformProps {
+  /** 'x' móvil horizontal | 'fall' se cae al pisarla. Por defecto 'x'. */
+  axis?: string;
+  /** Tiles de recorrido (móvil). Por defecto 3. */
+  range?: number;
+  /** px/s (móvil). Por defecto 50. */
+  speed?: number;
+}
+
+export interface DecoProps {
+  /** Decoración: box1 | box2 | box3. Por defecto box1. */
+  skin?: string;
 }
 
 export interface SpikesProps {
@@ -48,8 +86,8 @@ export interface SpikesProps {
   w?: number;
   /** Alto en tiles (pared). Por defecto 1. */
   h?: number;
-  /** Variante visual del obstaculo. Por defecto 'spikes'. */
-  variant?: 'spikes' | 'saw' | 'fire';
+  /** Variante del obstaculo. Por defecto 'spikes'. */
+  variant?: 'spikes' | 'saw' | 'fire' | 'arrow' | 'rock' | 'spikehead' | 'trampoline';
 }
 
 export interface ExitProps {
@@ -61,7 +99,7 @@ export interface Entity {
   kind: EntityKind;
   x: number;
   y: number;
-  props?: WalkerProps | FlyerProps | SpikesProps | ExitProps | Record<string, unknown>;
+  props?: WalkerProps | FlyerProps | SpikesProps | ExitProps | FruitProps | GemProps | PlatformProps | DecoProps | PlayerProps | Record<string, unknown>;
 }
 
 export interface Level {
