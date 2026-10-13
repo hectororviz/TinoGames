@@ -3,7 +3,7 @@
   "name": "Pixel Adventure",
   "tileSize": 16,
   "tiles": {
-    "ground": { "sheet": "tiles_pa.png", "tile": 16 }
+    "ground": { "sheet": "tiles_pa.png", "tile": 16, "variants": "0-9 tiles_pa, 10+ vendor_pa_terrain" }
   },
   "entities": {
     "player_start": { "sheet": "pink.png", "frame": 32, "anims": { "idle": [0], "run": [1, 2], "jump": [3], "fall": [4] } },
@@ -11,9 +11,9 @@
       { "sheet": "Apple.png", "frame": 32 },
       { "sheet": "Strawberry.png", "frame": 32 }
     ],
-    "walker": { "sheet": "tiles_pa.png", "note": "placeholder hasta tener hoja de enemigo" },
-    "flyer": { "sheet": "tiles_pa.png", "note": "placeholder hasta tener hoja de enemigo" },
-    "spikes": { "sheet": "vendor_pa_spike.png" },
+    "walker": { "sheet": "pig_walk.png", "frame": 36, "anims": { "walk": [0, 15] } },
+    "flyer": { "sheet": "bluebird_flying.png", "frame": 32, "anims": { "fly": [0, 8] } },
+    "spikes": { "sheet": "vendor_pa_spike.png", "variants": { "saw": "saw_on.png", "fire": "fire_on.png" } },
     "exit": { "sheet": "tiles_pa.png", "note": "puerta dedicada pendiente" }
   }
 }

@@ -12,3 +12,12 @@
   compuesta de sus hojas originales. El doble salto queda para después.
 
 Regla: si se agrega más del pack (frutas, enemigos, fondos), se anota acá.
+
+## Enemigos y trampas (Pixel Adventure 1 + 2, CC0)
+- Origen: Pixel Adventure 1 (trampas) y Pixel Adventure 2 (20 enemigos), ambos
+  CC0 de Pixel Frog. Archivos tomados del mirror GitHub del pack (mismos bytes CC0).
+- `pig_walk.png`: Angry Pig Walk, tira 576×30 (16 frames de 36×30). Walker.
+  (`pig_idle.png` de referencia, 324×30, 9 frames.)
+- `bluebird_flying.png`: Blue Bird Flying, tira 288×32 (9 frames de 32×32). Flyer.
+- `saw_on.png`: sierra encendida, tira 304×38 (8 frames de 38×38). Obstáculo.
+- `fire_on.png`: fuego encendido, tira 48×32 (3 frames de 16×32). Obstáculo.

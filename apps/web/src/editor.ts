@@ -12,15 +12,25 @@ import {
 } from './levels.js';
 import type { EditorData } from './levels.js';
 import tilesPaUrl from '../../../assets/tiles_pa.png?url';
+import terrainPaUrl from '../../../assets/vendor_pa_terrain.png?url';
 import vendorSpikeUrl from '../../../assets/vendor_pa_spike.png?url';
 import pinkUrl from '../../../assets/pink.png?url';
 import appleUrl from '../../../assets/Apple.png?url';
+import pigWalkUrl from '../../../assets/pig_walk.png?url';
+import bluebirdUrl from '../../../assets/bluebird_flying.png?url';
+import sawUrl from '../../../assets/saw_on.png?url';
+import fireUrl from '../../../assets/fire_on.png?url';
 
 const T = 16;
 /** Distancia en px de pantalla para distinguir click (pintar) de drag (pan). */
 const DRAG_THRESHOLD = 6;
+/** Variantes de piso: 0-9 plancha base, 10-251 plancha extendida. */
+const TILE_VARIANTS = 252;
+const TERRAIN_COLS = 22;
 
-type Tool = 'ground' | 'player_start' | 'walker' | 'flyer' | 'item' | 'spikes' | 'exit' | 'erase';
+type Tool = 'ground' | 'player_start' | 'enemy' | 'item' | 'spikes' | 'exit' | 'erase';
+type EnemyKind = 'walker' | 'flyer';
+type ObstacleVariant = 'spikes' | 'saw' | 'fire';
 
 function el(id: string): HTMLElement {
   const node = document.getElementById(id);
@@ -34,6 +44,9 @@ export class EditorScene extends Phaser.Scene {
   private pendingName = '';
   private dirty = false;
   private tool: Tool = 'ground';
+  private tileVariant = 0;
+  private enemyKind: EnemyKind = 'walker';
+  private obstacle: ObstacleVariant = 'spikes';
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private sprites: Phaser.GameObjects.GameObject[] = [];
   private lastGridKey = '';
@@ -81,9 +94,14 @@ export class EditorScene extends Phaser.Scene {
 
   private loadSprites(): void {
     this.load.spritesheet('tile', tilesPaUrl, { frameWidth: T, frameHeight: T });
+    this.load.spritesheet('terrain', terrainPaUrl, { frameWidth: T, frameHeight: T });
     this.load.image('spike', vendorSpikeUrl);
     this.load.spritesheet('pink', pinkUrl, { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('apple', appleUrl, { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('pig', pigWalkUrl, { frameWidth: 36, frameHeight: 30 });
+    this.load.spritesheet('bluebird', bluebirdUrl, { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('saw', sawUrl, { frameWidth: 38, frameHeight: 38 });
+    this.load.spritesheet('fire', fireUrl, { frameWidth: 16, frameHeight: 32 });
     this.load.once('complete', () => {
       this.makeTextures();
       this.setupScene();
@@ -92,32 +110,13 @@ export class EditorScene extends Phaser.Scene {
   }
 
   private makeTextures(): void {
-    // En revisitas las texturas ya existen en el TextureManager global.
-    if (this.textures.exists('walker') && this.textures.exists('flyer') && this.textures.exists('exit')) {
-      return;
-    }
+    // Walker/flyer ahora son sprites reales (pig/bluebird). Solo la salida
+    // sigue generada. En revisitas las texturas ya existen.
+    if (this.textures.exists('exit')) return;
     const g = this.add.graphics();
-    if (!this.textures.exists('walker')) {
-      g.fillStyle(0xcc3333, 1).fillRect(0, 0, 28, 28);
-      g.fillStyle(0xffffff, 1).fillCircle(8, 10, 4);
-      g.fillStyle(0xffffff, 1).fillCircle(20, 10, 4);
-      g.fillStyle(0x000000, 1).fillCircle(9, 11, 2);
-      g.fillStyle(0x000000, 1).fillCircle(21, 11, 2);
-      g.generateTexture('walker', 28, 28);
-      g.clear();
-    }
-    if (!this.textures.exists('flyer')) {
-      g.fillStyle(0x3388ff, 1).fillCircle(16, 16, 12);
-      g.fillStyle(0xffffff, 1).fillCircle(16, 16, 6);
-      g.generateTexture('flyer', 32, 32);
-      g.clear();
-    }
-    if (!this.textures.exists('exit')) {
-      g.fillStyle(0xc084fc, 1).fillRect(0, 0, 16, 32);
-      g.fillStyle(0xe9d5ff, 1).fillRect(0, 0, 16, 4);
-      g.generateTexture('exit', 16, 32);
-      g.clear();
-    }
+    g.fillStyle(0xc084fc, 1).fillRect(0, 0, 16, 32);
+    g.fillStyle(0xe9d5ff, 1).fillRect(0, 0, 16, 4);
+    g.generateTexture('exit', 16, 32);
     g.destroy();
   }
 
@@ -254,7 +253,9 @@ export class EditorScene extends Phaser.Scene {
     this.sprites = [];
 
     for (const tile of this.level.tiles) {
-      const sprite = this.add.image(tile.x * T, tile.y * T, 'tile', 0);
+      const v = tile.v ?? 0;
+      const [tex, frame]: [string, number] = v < 10 ? ['tile', v] : ['terrain', v - 10];
+      const sprite = this.add.image(tile.x * T, tile.y * T, tex, frame);
       sprite.setOrigin(0, 0);
       this.sprites.push(sprite);
     }
@@ -268,21 +269,23 @@ export class EditorScene extends Phaser.Scene {
           frame = 0;
           break;
         case 'walker':
-          texture = 'walker';
-          frame = undefined;
+          texture = 'pig';
+          frame = 0;
           break;
         case 'flyer':
-          texture = 'flyer';
-          frame = undefined;
+          texture = 'bluebird';
+          frame = 0;
           break;
         case 'item':
           texture = 'apple';
           frame = 0;
           break;
-        case 'spikes':
-          texture = 'spike';
-          frame = undefined;
+        case 'spikes': {
+          const variant = (entity.props as { variant?: string } | undefined)?.variant ?? 'spikes';
+          texture = variant === 'saw' ? 'saw' : variant === 'fire' ? 'fire' : 'spike';
+          frame = variant === 'spikes' ? undefined : 0;
           break;
+        }
         case 'exit':
           texture = 'exit';
           frame = undefined;
@@ -292,9 +295,13 @@ export class EditorScene extends Phaser.Scene {
       const cy = entity.y * T + T / 2;
       const sprite = this.add.image(cx, cy, texture, frame);
       sprite.setOrigin(0.5, 0.5);
-      // Sprites de 32px (pink/apple/flyer) se escalan al tile de 16px.
-      if (texture === 'pink' || texture === 'apple' || texture === 'flyer') {
+      // Sprites grandes se escalan al tile de 16px para previsualizar.
+      if (texture === 'pink' || texture === 'apple' || texture === 'bluebird') {
         sprite.setDisplaySize(T, T);
+      } else if (texture === 'pig') {
+        sprite.setDisplaySize(T * 1.2, T);
+      } else if (texture === 'saw') {
+        sprite.setDisplaySize(T * 1.5, T * 1.5);
       }
       this.sprites.push(sprite);
     }
@@ -312,6 +319,28 @@ export class EditorScene extends Phaser.Scene {
       };
     });
     this.refreshToolHighlight();
+    this.buildTileGrid();
+    this.refreshTileButton();
+
+    const enemySelect = document.getElementById('ed-enemy') as HTMLSelectElement | null;
+    if (enemySelect) {
+      enemySelect.value = this.enemyKind;
+      enemySelect.onchange = () => {
+        this.enemyKind = enemySelect.value === 'flyer' ? 'flyer' : 'walker';
+        this.tool = 'enemy';
+        this.refreshToolHighlight();
+      };
+    }
+    const obstacleSelect = document.getElementById('ed-obstacle') as HTMLSelectElement | null;
+    if (obstacleSelect) {
+      obstacleSelect.value = this.obstacle;
+      obstacleSelect.onchange = () => {
+        const v = obstacleSelect.value;
+        this.obstacle = v === 'saw' || v === 'fire' ? v : 'spikes';
+        this.tool = 'spikes';
+        this.refreshToolHighlight();
+      };
+    }
 
     el('ed-validate').onclick = () => this.updateStatus();
     el('ed-save').onclick = () => {
@@ -356,6 +385,69 @@ export class EditorScene extends Phaser.Scene {
     tools.forEach((btn) => {
       btn.classList.toggle('active', btn.getAttribute('data-tool') === this.tool);
     });
+  }
+
+  /** Estilo de miniatura para una variante de piso (escala 2x). */
+  private tileThumb(v: number): Record<string, string> {
+    if (v < 10) {
+      return {
+        backgroundImage: `url("${tilesPaUrl}")`,
+        backgroundSize: '320px 32px',
+        backgroundPosition: `-${v * 32}px 0`,
+      };
+    }
+    const i = v - 10;
+    const col = i % TERRAIN_COLS;
+    const row = Math.floor(i / TERRAIN_COLS);
+    return {
+      backgroundImage: `url("${terrainPaUrl}")`,
+      backgroundSize: '704px 352px',
+      backgroundPosition: `-${col * 32}px -${row * 32}px`,
+    };
+  }
+
+  private refreshTileButton(): void {
+    const btn = document.getElementById('ed-tile-btn');
+    if (!btn) return;
+    const style = this.tileThumb(this.tileVariant);
+    btn.style.backgroundImage = style['backgroundImage'];
+    btn.style.backgroundSize = style['backgroundSize'];
+    btn.style.backgroundPosition = style['backgroundPosition'];
+  }
+
+  private buildTileGrid(): void {
+    const grid = document.getElementById('ed-tile-grid');
+    const btn = document.getElementById('ed-tile-btn');
+    if (!grid || !btn || grid.childElementCount > 0) return;
+    for (let v = 0; v < TILE_VARIANTS; v++) {
+      const opt = document.createElement('button');
+      opt.type = 'button';
+      opt.title = `Piso ${v}`;
+      opt.dataset['v'] = String(v);
+      const style = this.tileThumb(v);
+      opt.style.backgroundImage = style['backgroundImage'];
+      opt.style.backgroundSize = style['backgroundSize'];
+      opt.style.backgroundPosition = style['backgroundPosition'];
+      opt.onclick = () => {
+        this.tileVariant = v;
+        this.tool = 'ground';
+        this.refreshToolHighlight();
+        this.refreshTileButton();
+        grid.querySelectorAll('button').forEach((b) => {
+          b.classList.toggle('sel', b === opt);
+        });
+        grid.hidden = true;
+      };
+      grid.appendChild(opt);
+    }
+    btn.onclick = () => {
+      grid.hidden = !grid.hidden;
+      if (!grid.hidden) {
+        const r = btn.getBoundingClientRect();
+        grid.style.top = `${r.bottom + 4}px`;
+        grid.style.left = `${Math.max(4, r.left)}px`;
+      }
+    };
   }
 
   private setStatus(text: string, ok: boolean): void {
@@ -514,11 +606,17 @@ export class EditorScene extends Phaser.Scene {
   private paintGround(x: number, y: number): void {
     const idx = this.level.tiles.findIndex((t) => t.x === x && t.y === y);
     if (idx >= 0) this.level.tiles.splice(idx, 1);
-    this.level.tiles.push({ x, y, t: 'ground' });
+    if (this.tileVariant === 0) {
+      this.level.tiles.push({ x, y, t: 'ground' });
+    } else {
+      this.level.tiles.push({ x, y, t: 'ground', v: this.tileVariant });
+    }
   }
 
   private paintEntity(x: number, y: number): void {
-    const kind = this.tool as Entity['kind'];
+    const tool = this.tool;
+    const kind: Entity['kind'] =
+      tool === 'enemy' ? this.enemyKind : tool === 'spikes' ? 'spikes' : (tool as Entity['kind']);
     if (kind === 'player_start' || kind === 'exit') {
       this.level.entities = this.level.entities.filter((e) => e.kind !== kind);
     }
@@ -531,6 +629,9 @@ export class EditorScene extends Phaser.Scene {
         break;
       case 'flyer':
         entity.props = { amp: 2, freq: 1.5 };
+        break;
+      case 'spikes':
+        if (this.obstacle !== 'spikes') entity.props = { variant: this.obstacle };
         break;
       case 'exit':
         entity.props = { needsAllItems: true };

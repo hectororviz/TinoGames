@@ -47,6 +47,10 @@ export function validateLevel(level: Level): ValidationError[] {
       fail('tile-shape', `bad tile shape: ${JSON.stringify(t)}`);
       continue;
     }
+    if (t.v !== undefined && (!isInt(t.v) || t.v < 0 || t.v > 251)) {
+      fail('tile-variant', `bad tile variant: ${JSON.stringify(t)}`);
+      continue;
+    }
     if (t.t === 'ground') solids.add(`${t.x},${t.y}`);
   }
 
@@ -113,6 +117,11 @@ export function validateLevel(level: Level): ValidationError[] {
       case 'spikes': {
         const w = Math.max(1, Math.floor((e.props as { w?: number } | undefined)?.w ?? 1));
         const h = Math.max(1, Math.floor((e.props as { h?: number } | undefined)?.h ?? 1));
+        const variant = (e.props as { variant?: unknown } | undefined)?.variant ?? 'spikes';
+        if (variant !== 'spikes' && variant !== 'saw' && variant !== 'fire') {
+          fail('spikes-variant', `bad spikes variant: ${JSON.stringify(variant)}`);
+          break;
+        }
         let ok = false;
         for (let dx = 0; dx < w && !ok; dx++) {
           if (solidAt(solids, e.x + dx, e.y + h)) ok = true;

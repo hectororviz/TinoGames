@@ -20,6 +20,33 @@ describe('validateLevel', () => {
     expect(codes).toContain('player-start');
   });
 
+  it('accepts ground tile variants', () => {
+    const level = loadSample();
+    level.tiles[0].v = 42;
+    expect(validateLevel(level)).toEqual([]);
+  });
+
+  it('rejects a bad tile variant', () => {
+    const level = loadSample();
+    level.tiles[0].v = 999;
+    const codes = validateLevel(level).map((e) => e.code);
+    expect(codes).toContain('tile-variant');
+  });
+
+  it('accepts spikes variants', () => {
+    const level = loadSample();
+    const spikes = level.entities.find((e) => e.kind === 'spikes')!;
+    spikes.props = { ...(spikes.props as object), variant: 'saw' };
+    expect(validateLevel(level)).toEqual([]);
+  });
+
+  it('rejects a bad spikes variant', () => {
+    const level = loadSample();
+    const spikes = level.entities.find((e) => e.kind === 'spikes')!;
+    spikes.props = { ...(spikes.props as object), variant: 'lava' };
+    const codes = validateLevel(level).map((e) => e.code);
+    expect(codes).toContain('spikes-variant');
+  });
   it('accepts player_start up to 3 tiles above ground', () => {
     const level = loadSample();
     const start = level.entities.find((e) => e.kind === 'player_start')!;

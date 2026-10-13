@@ -15,6 +15,9 @@ export interface Tile {
   y: number;
   /** Tipo de tile. Anadir tipos nuevos no rompe niveles viejos. */
   t: 'ground' | 'spikes' | (string & {});
+  /** Variante visual (solo estetica, misma colision). 0-9: plancha base,
+   *  10+: plancha extendida de terreno. Ausente = 0. */
+  v?: number;
 }
 
 export type EntityKind =
@@ -45,6 +48,8 @@ export interface SpikesProps {
   w?: number;
   /** Alto en tiles (pared). Por defecto 1. */
   h?: number;
+  /** Variante visual del obstaculo. Por defecto 'spikes'. */
+  variant?: 'spikes' | 'saw' | 'fire';
 }
 
 export interface ExitProps {

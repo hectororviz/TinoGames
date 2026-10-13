@@ -8,7 +8,12 @@ import pinkUrl from '../../../assets/pink.png?url';
 import appleUrl from '../../../assets/Apple.png?url';
 import strawberryUrl from '../../../assets/Strawberry.png?url';
 import tilesPaUrl from '../../../assets/tiles_pa.png?url';
+import terrainPaUrl from '../../../assets/vendor_pa_terrain.png?url';
 import vendorSpikeUrl from '../../../assets/vendor_pa_spike.png?url';
+import pigWalkUrl from '../../../assets/pig_walk.png?url';
+import bluebirdUrl from '../../../assets/bluebird_flying.png?url';
+import sawUrl from '../../../assets/saw_on.png?url';
+import fireUrl from '../../../assets/fire_on.png?url';
 
 const T = FEEL.tile;
 
@@ -69,6 +74,11 @@ export class GameScene extends Phaser.Scene {
     this.load.spritesheet('apple', appleUrl, { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('strawberry', strawberryUrl, { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('tile', tilesPaUrl, { frameWidth: 16, frameHeight: 16 });
+    this.load.spritesheet('terrain', terrainPaUrl, { frameWidth: 16, frameHeight: 16 });
+    this.load.spritesheet('pig', pigWalkUrl, { frameWidth: 36, frameHeight: 30 });
+    this.load.spritesheet('bluebird', bluebirdUrl, { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('saw', sawUrl, { frameWidth: 38, frameHeight: 38 });
+    this.load.spritesheet('fire', fireUrl, { frameWidth: 16, frameHeight: 32 });
     this.load.image('spike', vendorSpikeUrl);
   }
 
@@ -119,7 +129,8 @@ export class GameScene extends Phaser.Scene {
       maxX = Math.max(maxX, t.x);
       maxY = Math.max(maxY, t.y);
       if (t.t === 'ground') {
-        const img = solids.create(t.x * T + T / 2, t.y * T + T / 2, 'tile', 0) as Phaser.Physics.Arcade.Image;
+        const [tex, frame] = this.tileFrame(t.v);
+        const img = solids.create(t.x * T + T / 2, t.y * T + T / 2, tex, frame) as Phaser.Physics.Arcade.Image;
         img.refreshBody();
         img.setDepth(-5);
         img.setData('key', tileKey('tile', t.x, t.y));
@@ -157,11 +168,13 @@ export class GameScene extends Phaser.Scene {
         }
         case 'walker': {
           const props = (e.props ?? {}) as { range?: number; speed?: number };
-          // Textura 28x28 (mitad 14px): apoyar 1px arriba si hay piso debajo,
-          // igual que el player, para no spawnear embebido y caerse.
+          // Chancho 36x30, body 30x24 (mitad 12px): apoyar 1px arriba si hay
+          // piso debajo para no spawnear embebido.
           const wFloor = level.tiles.some((t) => t.t === 'ground' && t.x === e.x && t.y === e.y + 1);
-          const spr = this.physics.add.sprite(cx, wFloor ? (e.y + 1) * T - 15 : cy, 'walker');
+          const spr = this.physics.add.sprite(cx, wFloor ? (e.y + 1) * T - 13 : cy, 'pig', 0);
+          (spr.body as Phaser.Physics.Arcade.Body).setSize(30, 24);
           spr.setCollideWorldBounds(false);
+          spr.play('pig-walk');
           this.walkers.push({
             spr,
             homeX: cx,
@@ -173,9 +186,10 @@ export class GameScene extends Phaser.Scene {
         }
         case 'flyer': {
           const props = (e.props ?? {}) as { amp?: number; freq?: number };
-          const spr = this.physics.add.sprite(cx, cy, 'flyer');
+          const spr = this.physics.add.sprite(cx, cy, 'bluebird', 0);
           (spr.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
           (spr.body as Phaser.Physics.Arcade.Body).setImmovable(true);
+          spr.play('bluebird-fly');
           this.flyers.push({
             spr,
             baseX: cx,
@@ -187,11 +201,23 @@ export class GameScene extends Phaser.Scene {
           break;
         }
         case 'spikes': {
-          const props = (e.props ?? {}) as { w?: number; h?: number };
+          const props = (e.props ?? {}) as { w?: number; h?: number; variant?: string };
           const w = Math.max(1, Math.floor(props.w ?? 1));
           const h = Math.max(1, Math.floor(props.h ?? 1));
+          const variant = props.variant ?? 'spikes';
           for (let dx = 0; dx < w; dx++) {
             for (let dy = 0; dy < h; dy++) {
+              if (variant === 'saw' || variant === 'fire') {
+                // Animados: sprite dinamico quieto (el estatico no anima).
+                const tex = variant === 'saw' ? 'saw' : 'fire';
+                const spr = this.physics.add.sprite(cx + dx * T, cy + dy * T, tex, 0);
+                const b = spr.body as Phaser.Physics.Arcade.Body;
+                b.setAllowGravity(false);
+                b.setImmovable(true);
+                spr.play(variant === 'saw' ? 'saw-spin' : 'fire-burn');
+                spikes.add(spr);
+                continue;
+              }
               const s = spikes.create(cx + dx * T, cy + dy * T, 'spike') as Phaser.Physics.Arcade.Image;
               s.refreshBody();
               (s.body as Phaser.Physics.Arcade.Body).setSize(T, 10);
@@ -219,6 +245,10 @@ export class GameScene extends Phaser.Scene {
     this.anims.create({ key: 'run', frames: [{ key: 'pink', frame: 1 }, { key: 'pink', frame: 2 }], frameRate: 8, repeat: -1 });
     this.anims.create({ key: 'jump', frames: [{ key: 'pink', frame: 3 }], frameRate: 1, repeat: -1 });
     this.anims.create({ key: 'fall', frames: [{ key: 'pink', frame: 4 }], frameRate: 1, repeat: -1 });
+    this.anims.create({ key: 'pig-walk', frames: this.anims.generateFrameNumbers('pig', { start: 0, end: 15 }), frameRate: 12, repeat: -1 });
+    this.anims.create({ key: 'bluebird-fly', frames: this.anims.generateFrameNumbers('bluebird', { start: 0, end: 8 }), frameRate: 10, repeat: -1 });
+    this.anims.create({ key: 'saw-spin', frames: this.anims.generateFrameNumbers('saw', { start: 0, end: 7 }), frameRate: 12, repeat: -1 });
+    this.anims.create({ key: 'fire-burn', frames: this.anims.generateFrameNumbers('fire', { start: 0, end: 2 }), frameRate: 8, repeat: -1 });
 
     this.physics.add.collider(this.player, solids);
     for (const w of this.walkers) this.physics.add.collider(w.spr, solids);
@@ -260,19 +290,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private makeTextures(): void {
-    if (!this.textures.exists('walker')) {
+    if (!this.textures.exists('exit-locked')) {
       const g = this.add.graphics();
-      g.fillStyle(0xcc3333, 1).fillRect(0, 0, 28, 28);
-      g.fillStyle(0xffffff, 1).fillCircle(8, 10, 4);
-      g.fillStyle(0xffffff, 1).fillCircle(20, 10, 4);
-      g.fillStyle(0x000000, 1).fillCircle(9, 11, 2);
-      g.fillStyle(0x000000, 1).fillCircle(21, 11, 2);
-      g.generateTexture('walker', 28, 28);
-      g.clear();
-      g.fillStyle(0x3388ff, 1).fillCircle(16, 16, 12);
-      g.fillStyle(0xffffff, 1).fillCircle(16, 16, 6);
-      g.generateTexture('flyer', 32, 32);
-      g.clear();
       g.fillStyle(0x555566, 1).fillRect(0, 0, 16, 32);
       g.fillStyle(0x888899, 1).fillRect(0, 0, 16, 4);
       g.generateTexture('exit-locked', 16, 32);
@@ -282,6 +301,13 @@ export class GameScene extends Phaser.Scene {
       g.generateTexture('exit-open', 16, 32);
       g.destroy();
     }
+  }
+
+  /** Textura+frame para un tile según su variante visual (solo estética). */
+  private tileFrame(v: number | undefined): [string, number] {
+    const variant = v ?? 0;
+    if (variant < 10) return ['tile', variant];
+    return ['terrain', variant - 10];
   }
 
   private refreshHud(): void {
@@ -395,6 +421,7 @@ export class GameScene extends Phaser.Scene {
       const wb = w.spr.body as Phaser.Physics.Arcade.Body;
       if (wb.blocked.left) w.dir = 1;
       if (wb.blocked.right) w.dir = -1;
+      w.spr.setFlipX(w.dir < 0);
     }
 
     // Flyers: seno.

@@ -58,6 +58,16 @@
         border: 1px solid #55557a; border-radius: 6px; padding: 6px 8px; min-width: 140px; }
       #editor-ui select { font-size: 14px; color: #fff; background: #23233d;
         border: 1px solid #55557a; border-radius: 6px; padding: 6px 8px; max-width: 180px; }
+      #ed-tile-btn { width: 36px; height: 36px; padding: 0; image-rendering: pixelated;
+        background-repeat: no-repeat; }
+      #ed-tile-grid { position: fixed; z-index: 20; max-width: min(560px, 94vw); max-height: 50vh;
+        overflow: auto; background: #23233d; border: 1px solid #55557a; border-radius: 8px;
+        padding: 8px; display: grid; grid-template-columns: repeat(auto-fill, 32px); gap: 4px; }
+      #ed-tile-grid[hidden] { display: none; }
+      #ed-tile-grid button { width: 32px; height: 32px; padding: 0; image-rendering: pixelated;
+        background-repeat: no-repeat; background-color: #1a1a2e;
+        border: 1px solid #44446a; border-radius: 4px; cursor: pointer; }
+      #ed-tile-grid button.sel { border-color: #4a9eff; outline: 2px solid #4a9eff; }
     </style>
   </head>
   <body>
@@ -100,12 +110,25 @@
       </div>
       <div class="row" id="ed-tools">
         <button type="button" data-tool="ground">Piso</button>
+        <button type="button" id="ed-tile-btn" title="Variante de piso"></button>
+        <div id="ed-tile-grid" hidden></div>
         <button type="button" data-tool="erase">Borrar</button>
         <button type="button" data-tool="player_start">Inicio</button>
-        <button type="button" data-tool="walker">Walker</button>
-        <button type="button" data-tool="flyer">Flyer</button>
+        <select id="ed-player" aria-label="Personaje">
+          <option value="pink">Pink Man</option>
+        </select>
+        <button type="button" data-tool="enemy">Enemigo</button>
+        <select id="ed-enemy" aria-label="Tipo de enemigo">
+          <option value="walker">Caminante</option>
+          <option value="flyer">Volador</option>
+        </select>
         <button type="button" data-tool="item">Item</button>
-        <button type="button" data-tool="spikes">Pinchos</button>
+        <button type="button" data-tool="spikes">Obstáculo</button>
+        <select id="ed-obstacle" aria-label="Tipo de obstáculo">
+          <option value="spikes">Pinchos</option>
+          <option value="saw">Sierra</option>
+          <option value="fire">Fuego</option>
+        </select>
         <button type="button" data-tool="exit">Salida</button>
       </div>
       <div class="row">
