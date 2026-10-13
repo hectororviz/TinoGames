@@ -18,7 +18,7 @@ El juego, el editor y las cuentas viven en el mismo monorepo.
 2. Web: `pnpm dev:web` → http://localhost:5173 (flechas/A-D moverse, Espacio salta x2, J dash, R reinicia).
 3. API local:
    - `docker compose up db -d` (solo Postgres en :5432)
-   - `pnpm dev:server` (requiere `DATABASE_URL` en `.env.local`)
+   - `pnpm dev:server` (requiere `DATABASE_URL` y `JWT_SECRET` en el entorno)
 4. `pnpm typecheck && pnpm test`
 
 ## Deploy (VPS)

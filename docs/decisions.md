@@ -12,17 +12,25 @@
 
 ## Portado del prototipo Godot
 
-- Feel (`apps/web/src/feel.ts`): speed 110, jump 280, gravity 700,
-  coyote 0.10s, buffer 0.12s, doble 0.9x, dash 260/0.12s/cd 0.8s, 3HP,
-  invuln 1.0s, knockback (160,-180), items seno +-3px.
-- Arte (`assets/`, pack Pixel Adventure CC0): pink (héroe), terreno, Apple,
-  Strawberry, pinchos, fondos, heart. `kid.png`/`pig.png` descartados.
-  `assets/gen_art.py` regenera fondos/corazón.
+- Feel (`apps/web/src/feel.ts`): speed 110, jump 320 (salto simple 4.5 tiles),
+  gravity 700, coyote 0.10s, buffer 0.12s, doble 0.9x, dash 260/0.12s/cd 0.8s,
+  3HP, invuln 1.0s, knockback (160,-180), player body 14×26.
+- Arte (`assets/`, Pixel Adventure 1+2 CC0 + Sunny Land bosque CC0 + generado
+  propio): 4 personajes, 8 frutas, 3 gemas, 20 enemigos, 7 obstáculos,
+  checkpoints, salida End, plataformas, 252 variantes de piso, 6 biomas.
+  Créditos en `assets/CREDITS_PIXELADVENTURE.md`.
 - Lecciones que siguen valiendo: vertical slice primero, feel antes que
   contenido, items con propósito (llave de salida), commits por hito jugable.
 
+## Hecho desde entonces (no reabrir)
+
+- Editor web completo (riel en cascada, undo/redo, atajos, Probar↔Editor).
+- Auth real (scrypt + JWT, sin header temporal) y niveles por dueño + PIN.
+- Niveles solo en servidor; jugar por PIN público y sin login.
+- Trampas animadas como estáticos (los dinámicos en grupo caían).
+- Respawn con snap a piso; walkers giran en bordes; plataformas cinemáticas.
+- AdSense integrado (slot + `ads.txt` + privacidad en el landing).
+
 ## Pendiente explícito
 
-- Editor web (Fase 0), auth real (header `x-user-id` temporal), puerta de
-  salida dedicada y hojas de enemigos (placeholders geométricos por ahora),
-  stomp en walkers (hoy el contacto daña), service worker PWA.
+- Stomp en walkers (hoy el contacto daña), service worker PWA, sonido.
