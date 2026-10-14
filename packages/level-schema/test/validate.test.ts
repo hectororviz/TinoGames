@@ -109,13 +109,12 @@ describe('validateLevel', () => {
     expect(codes).toContain('inside-solid');
   });
 
-  it('rejects spikes with no support', () => {
+  it('accepts spikes floating in the air (static, no support needed)', () => {
     const level = loadSample();
     const spikes = level.entities.find((e) => e.kind === 'spikes');
     spikes!.x = 40;
     spikes!.y = 1;
-    const codes = validateLevel(level).map((e) => e.code);
-    expect(codes).toContain('spikes-support');
+    expect(validateLevel(level).filter((e) => e.code === 'spikes-support')).toEqual([]);
   });
 
   it('rejects a wrong format version', () => {

@@ -20,8 +20,10 @@ function solidAt(solids: Set<string>, x: number, y: number): boolean {
  *   pintar 1 tile arriba del piso y caer al probar, sin quedar embebido).
  * - exit con tile solido (ground) justo debajo.
  * - flyer / item en el aire (la celda no es solida).
- * - spikes como tramo (piso) o columna (pared): al menos una dimension >= 1
- *   y apoyado en solido o adosado a solido lateral.
+ * - spikes y obstaculos (saw/fire/arrow/rock/spikehead/trampoline): estaticos,
+ *   se pueden poner en cualquier ubicacion en aire (solo se rechaza si quedan
+ *   dentro de solido).
+ * - powerup (cajas box1/box2/box3): rompible, solo exige no estar en solido.
  */
 export function validateLevel(level: Level): ValidationError[] {
   const errors: ValidationError[] = [];
@@ -126,6 +128,7 @@ export function validateLevel(level: Level): ValidationError[] {
         break;
       case 'platform':
       case 'deco':
+      case 'powerup':
         if (solidAt(solids, e.x, e.y)) {
           fail('inside-solid', `${e.kind} at (${e.x},${e.y}) is inside solid`);
         }
@@ -146,14 +149,14 @@ export function validateLevel(level: Level): ValidationError[] {
           fail('spikes-variant', `bad spikes variant: ${JSON.stringify(variant)}`);
           break;
         }
-        let ok = false;
-        for (let dx = 0; dx < w && !ok; dx++) {
-          if (solidAt(solids, e.x + dx, e.y + h)) ok = true;
+        for (let dx = 0; dx < w; dx++) {
+          for (let dy = 0; dy < h; dy++) {
+            if (solidAt(solids, e.x + dx, e.y + dy)) {
+              fail('inside-solid', `spikes at (${e.x},${e.y}) is inside solid`);
+              break;
+            }
+          }
         }
-        for (let dy = 0; dy < h && !ok; dy++) {
-          if (solidAt(solids, e.x - 1, e.y + dy) || solidAt(solids, e.x + w, e.y + dy)) ok = true;
-        }
-        if (!ok) fail('spikes-support', `spikes at (${e.x},${e.y}) need floor below or wall beside`);
         break;
       }
       default:

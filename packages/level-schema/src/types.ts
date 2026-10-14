@@ -31,6 +31,7 @@ export type EntityKind =
   | 'checkpoint'
   | 'platform'
   | 'deco'
+  | 'powerup'
   | 'exit'
   | (string & {});
 
@@ -49,6 +50,10 @@ export interface WalkerProps {
 }
 
 export interface FlyerProps {
+  /** Eje de patrulla: 'x' lateral | 'y' vertical clásico. Por defecto 'x'. */
+  axis?: string;
+  /** Recorrido lateral en tiles (eje x). Por defecto 3. */
+  range?: number;
   /** Amplitud vertical en tiles. Por defecto 2. */
   amp?: number;
   /** Oscilaciones por segundo. Por defecto 1. */
@@ -77,7 +82,12 @@ export interface PlatformProps {
 }
 
 export interface DecoProps {
-  /** Decoración: box1 | box2 | box3. Por defecto box1. */
+  /** Decoración legacy: box1 | box2 | box3. Por defecto box1. */
+  skin?: string;
+}
+
+export interface PowerupProps {
+  /** Caja de poder: box1 | box2 | box3. Por defecto box1. */
   skin?: string;
 }
 
@@ -99,7 +109,7 @@ export interface Entity {
   kind: EntityKind;
   x: number;
   y: number;
-  props?: WalkerProps | FlyerProps | SpikesProps | ExitProps | FruitProps | GemProps | PlatformProps | DecoProps | PlayerProps | Record<string, unknown>;
+  props?: WalkerProps | FlyerProps | SpikesProps | ExitProps | FruitProps | GemProps | PlatformProps | DecoProps | PowerupProps | PlayerProps | Record<string, unknown>;
 }
 
 export interface Level {

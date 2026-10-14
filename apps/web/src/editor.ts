@@ -14,6 +14,7 @@ import {
   GEMS,
   OBSTACLES,
   PLATFORMS,
+  POWERUPS,
   TILES_BASE,
   TILES_EXTRA,
   TRAMP_IDLE,
@@ -42,6 +43,7 @@ type Tool =
   | 'platform'
   | 'spikes'
   | 'deco'
+  | 'powerup'
   | 'exit'
   | 'erase'
   | 'hand';
@@ -68,7 +70,7 @@ export class EditorScene extends Phaser.Scene {
   private gemColor = 'purple';
   private platformAxis = 'x';
   private obstacle = 'spikes';
-  private decoSkin = 'box1';
+  private powerSkin = 'box1';
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private guideGraphics!: Phaser.GameObjects.Graphics;
   private ghost!: Phaser.GameObjects.Image;
@@ -353,6 +355,10 @@ export class EditorScene extends Phaser.Scene {
         if (def.id === 'rock') return { tex: def.image!.key, h: 18, fh: 42 };
         if (def.id === 'spikehead') return { tex: def.image!.key, h: 18, fh: 52 };
         return { tex: 'spike', h: 18, fh: 16 };
+      }
+      case 'powerup': {
+        const d = POWERUPS.find((x) => x.id === props?.['skin']) ?? POWERUPS[0];
+        return { tex: d.key, h: 18, fh: d.h };
       }
       case 'deco': {
         const d = DECOS.find((x) => x.id === props?.['skin']) ?? DECOS[0];
@@ -708,10 +714,10 @@ export class EditorScene extends Phaser.Scene {
       this.platformAxis = 'fall';
       this.tool = 'platform';
     });
-    for (const d of DECOS) {
+    for (const d of POWERUPS) {
       this.fopt(grid, d.label, this.sheetThumb(d.url, d.w, d.h, 1), () => {
-        this.decoSkin = d.id;
-        this.tool = 'deco';
+        this.powerSkin = d.id;
+        this.tool = 'powerup';
       });
     }
     this.fopt(grid, 'Salida', this.sheetThumb(EXIT_DOOR.idle.url, 64, 64, 1), () => {
@@ -764,6 +770,9 @@ export class EditorScene extends Phaser.Scene {
       const o = OBSTACLES.find((x) => x.id === (sel.props['variant'] ?? 'spikes')) ?? OBSTACLES[0];
       if (o.tex) { url = o.tex.url; fw = o.tex.fw; frames = o.tex.frames; }
       else { url = o.image!.url; fw = p.fh; frames = 1; }
+    } else if (sel.kind === 'powerup') {
+      const d = POWERUPS.find((x) => x.id === sel.props['skin']) ?? POWERUPS[0];
+      url = d.url; fw = d.w; frames = 1;
     } else if (sel.kind === 'deco') {
       const d = DECOS.find((x) => x.id === sel.props['skin']) ?? DECOS[0];
       url = d.url; fw = d.w; frames = 1;
@@ -785,7 +794,7 @@ export class EditorScene extends Phaser.Scene {
       case 'checkpoint': return 'Checkpoint';
       case 'platform': return this.platformAxis === 'fall' ? 'Plataforma que cae' : 'Plataforma móvil';
       case 'spikes': return (OBSTACLES.find((o) => o.id === this.obstacle) ?? OBSTACLES[0]).label;
-      case 'deco': return (DECOS.find((d) => d.id === this.decoSkin) ?? DECOS[0]).label;
+      case 'powerup': return (POWERUPS.find((d) => d.id === this.powerSkin) ?? POWERUPS[0]).label;
       case 'exit': return 'Salida';
       case 'erase': return 'Borrar';
       case 'hand': return 'Mano';
@@ -1112,7 +1121,7 @@ export class EditorScene extends Phaser.Scene {
     this.input.keyboard?.on('keyup-SPACE', () => {
       this.spaceDown = false;
     });
-    const digits: (Tool | null)[] = ['ground', 'player_start', 'enemy', 'fruit', 'gem', 'spikes', 'checkpoint', 'platform', 'deco'];
+    const digits: (Tool | null)[] = ['ground', 'player_start', 'enemy', 'fruit', 'gem', 'spikes', 'checkpoint', 'platform', 'powerup'];
     digits.forEach((tool, i) => {
       this.input.keyboard?.on(`keydown-${i + 1}`, () => {
         if (this.typing()) return;
@@ -1184,6 +1193,9 @@ export class EditorScene extends Phaser.Scene {
         if (skin.kind === 'walker') {
           props['range'] = skin.range ?? 4;
           props['speed'] = skin.speed ?? 40;
+        } else {
+          props['axis'] = 'x';
+          props['range'] = 3;
         }
         return { kind: skin.kind, props };
       }
@@ -1199,8 +1211,8 @@ export class EditorScene extends Phaser.Scene {
         return { kind: 'platform', props: { axis: this.platformAxis, range: 3, speed: 50 } };
       case 'spikes':
         return { kind: 'spikes', props: this.obstacle !== 'spikes' ? { variant: this.obstacle } : {} };
-      case 'deco':
-        return { kind: 'deco', props: { skin: this.decoSkin } };
+      case 'powerup':
+        return { kind: 'powerup', props: { skin: this.powerSkin } };
       case 'exit':
         return { kind: 'exit', props: { needsAllItems: true } };
       default:

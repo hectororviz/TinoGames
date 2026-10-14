@@ -236,6 +236,13 @@ export const DECOS: { id: string; label: string; key: string; url: string; w: nu
   { id: 'box3', label: 'Caja 3', key: 'deco-box3', url: box3Url, w: 28, h: 24 },
 ];
 
+/** Cajas de poder (reusan los sprites de las ex-deco): al romperlas dan disparo infinito. */
+export const POWERUPS: { id: string; label: string; key: string; url: string; w: number; h: number }[] = [
+  { id: 'box1', label: 'Caja fuego 1', key: 'deco-box1', url: box1Url, w: 28, h: 24 },
+  { id: 'box2', label: 'Caja fuego 2', key: 'deco-box2', url: box2Url, w: 28, h: 24 },
+  { id: 'box3', label: 'Caja fuego 3', key: 'deco-box3', url: box3Url, w: 28, h: 24 },
+];
+
 export const TILES_BASE = { key: 'tile', url: tilesPaUrl };
 export const TILES_EXTRA = { key: 'terrain', url: terrainPaUrl };
 export const CHECKPOINT = {

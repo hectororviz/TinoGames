@@ -17,6 +17,7 @@ import {
   GEMS,
   OBSTACLES,
   PLATFORMS,
+  POWERUPS,
   TILES_BASE,
   TILES_EXTRA,
   TRAMP_IDLE,
@@ -44,6 +45,15 @@ interface Flyer {
   ampPx: number;
   freq: number;
   t: number;
+  axis: 'x' | 'y';
+  rangePx: number;
+  prevX: number;
+}
+
+interface Bullet {
+  img: Phaser.Physics.Arcade.Image;
+  vx: number;
+  startX: number;
 }
 
 interface Floater {
@@ -95,6 +105,10 @@ export class GameScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyR!: Phaser.Input.Keyboard.Key;
   private keyJ!: Phaser.Input.Keyboard.Key;
+  private keyShoot!: Phaser.Input.Keyboard.Key;
+  private hasGun = false;
+  private shootCd = 0;
+  private sliding = false;
   private hp = FEEL.maxHp;
   private gems = 0;
   private gemsTotal = 0;
@@ -118,6 +132,8 @@ export class GameScene extends Phaser.Scene {
   private movers: Mover[] = [];
   private fallers: Faller[] = [];
   private checkpoints: Phaser.Physics.Arcade.Image[] = [];
+  private boxes: Phaser.Physics.Arcade.Image[] = [];
+  private bullets: Bullet[] = [];
   private exitZone: { spr: Phaser.GameObjects.Sprite; open: boolean; x: number; y: number } | null = null;
   private hudGems!: Phaser.GameObjects.Text;
   private hudHp!: Phaser.GameObjects.Text;
@@ -195,6 +211,11 @@ export class GameScene extends Phaser.Scene {
     this.movers = [];
     this.fallers = [];
     this.checkpoints = [];
+    this.boxes = [];
+    this.bullets = [];
+    this.hasGun = false;
+    this.shootCd = 0;
+    this.sliding = false;
     this.exitZone = null;
     this.hp = FEEL.maxHp;
     this.gems = 0;
@@ -235,6 +256,7 @@ export class GameScene extends Phaser.Scene {
     const spikes = this.physics.add.staticGroup();
     const hazards = this.physics.add.staticGroup();
     const checkpoints = this.physics.add.staticGroup();
+    const boxes = this.physics.add.staticGroup();
     const start = level.entities.find((e) => e.kind === 'player_start');
     const playerSkinId = (start?.props as { skin?: string } | undefined)?.skin;
     this.playerSkin = skinOf(CHAR_SKINS, playerSkinId, 'pink');
@@ -307,6 +329,7 @@ export class GameScene extends Phaser.Scene {
           (spr.body as Phaser.Physics.Arcade.Body).setImmovable(true);
           (spr.body as Phaser.Physics.Arcade.Body).setSize(skin.bw, skin.bh);
           spr.play(`foe-${skin.id}`);
+          const axis = (props['axis'] as string | undefined) === 'y' ? 'y' : 'x';
           this.flyers.push({
             spr,
             baseX: cx,
@@ -314,6 +337,9 @@ export class GameScene extends Phaser.Scene {
             ampPx: ((props['amp'] as number | undefined) ?? 2) * T,
             freq: (props['freq'] as number | undefined) ?? 1.5,
             t: Math.random() * 10,
+            axis,
+            rangePx: ((props['range'] as number | undefined) ?? 3) * T,
+            prevX: cx,
           });
           break;
         }
@@ -333,7 +359,18 @@ export class GameScene extends Phaser.Scene {
           spr.setOrigin(0.5, 1);
           spr.refreshBody();
           spr.setData('active', false);
+          spr.setData('tx', e.x);
+          spr.setData('ty', e.y);
           this.checkpoints.push(spr);
+          break;
+        }
+        case 'powerup': {
+          const skin = POWERUPS.find((d) => d.id === (props['skin'] as string | undefined)) ?? POWERUPS[0];
+          const spr = boxes.create(cx, cy, skin.key) as Phaser.Physics.Arcade.Image;
+          spr.refreshBody();
+          (spr.body as Phaser.Physics.Arcade.Body).setImmovable(true);
+          spr.setData('broken', false);
+          this.boxes.push(spr);
           break;
         }
         case 'platform': {
@@ -387,9 +424,13 @@ export class GameScene extends Phaser.Scene {
 
     const moverSprites = this.movers.map((m) => m.spr);
     const fallerSprites = this.fallers.map((f) => f.spr);
+    const boxSprites = this.boxes;
     this.physics.add.collider(this.player, solids);
     this.physics.add.collider(this.player, moverSprites);
     this.physics.add.collider(this.player, fallerSprites);
+    this.physics.add.collider(this.player, boxSprites, (_p, obj) => {
+      this.hitBox(obj as Phaser.Physics.Arcade.Image);
+    });
     for (const w of this.walkers) this.physics.add.collider(w.spr, solids);
     for (const w of this.walkers) {
       this.physics.add.collider(w.spr, moverSprites);
@@ -414,7 +455,6 @@ export class GameScene extends Phaser.Scene {
       this.showMsg(this.gems >= this.gemsTotal ? '¡Salida abierta!' : '¡Gema!');
       if (this.gems >= this.gemsTotal) this.openExit();
     });
-    const hurt = () => this.damage(1, this.player.x - 8);
     this.physics.add.overlap(this.player, spikes, () => this.damage(1, this.player.x));
     this.physics.add.overlap(this.player, hazards, (_p, obj) => {
       const go = obj as Phaser.GameObjects.GameObject;
@@ -424,8 +464,8 @@ export class GameScene extends Phaser.Scene {
       }
       this.damage(1, this.player.x);
     });
-    for (const w of this.walkers) this.physics.add.overlap(this.player, w.spr, () => hurt());
-    for (const f of this.flyers) this.physics.add.overlap(this.player, f.spr, () => hurt());
+    for (const w of this.walkers) this.physics.add.overlap(this.player, w.spr, () => this.hitEnemy(w.spr));
+    for (const f of this.flyers) this.physics.add.overlap(this.player, f.spr, () => this.hitEnemy(f.spr));
     for (const c of this.checkpoints) {
       this.physics.add.overlap(this.player, c, () => this.activateCheckpoint(c));
     }
@@ -446,12 +486,15 @@ export class GameScene extends Phaser.Scene {
     this.keyR = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R);
     this.keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     this.keyJ = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.J);
-    this.input.keyboard!.addCapture(['SPACE', 'UP']);
+    this.keyShoot = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+    this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.K).on('down', () => this.tryShoot());
+    this.input.keyboard!.addCapture(['SPACE', 'UP', 'X']);
     bindTouch(
       () => {
         this.buffer = FEEL.jumpBuffer;
       },
       () => this.tryDash(),
+      () => this.tryShoot(),
     );
   }
 
@@ -555,8 +598,8 @@ export class GameScene extends Phaser.Scene {
     c.setData('active', true);
     c.setTexture(CHECKPOINT.on.key, 0);
     this.addLoop(c, CHECKPOINT.on.key, CHECKPOINT.on.frames, 12);
-    const tileX = Math.floor(c.x / T);
-    const tileY = Math.floor(c.y / T);
+    const tileX = (c.getData('tx') as number | undefined) ?? Math.floor(c.x / T);
+    const tileY = (c.getData('ty') as number | undefined) ?? Math.floor(c.y / T) - 1;
     const p = this.snapToGround(tileX, tileY);
     this.startX = p.x;
     this.startY = p.y;
@@ -587,7 +630,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private refreshHud(): void {
-    this.hudGems.setText(`💎 ${this.gems}/${this.gemsTotal}`);
+    this.hudGems.setText(`💎 ${this.gems}/${this.gemsTotal}${this.hasGun ? ' 🔥' : ''}`);
     this.hudHp.setText('❤'.repeat(this.hp) + '🤍'.repeat(Math.max(0, FEEL.maxHp - this.hp)));
   }
 
@@ -620,23 +663,153 @@ export class GameScene extends Phaser.Scene {
   }
 
   private respawn(fullHeal: boolean): void {
+    this.setSlide(false);
     this.player.setPosition(this.startX, this.startY);
     this.player.setVelocity(0, 0);
+    // Si el punto quedó dentro de sólido, subir hasta celda libre.
+    for (let i = 0; i < 6; i++) {
+      const tx = Math.floor(this.player.x / T);
+      const ty = Math.floor(this.player.y / T);
+      if (!this.solidSet.has(`${tx},${ty}`)) break;
+      this.player.y -= 8;
+    }
     this.coyote = 0;
     this.buffer = 0;
     this.dashT = 0;
+    this.dashCd = 0;
     if (fullHeal) {
       this.hp = FEEL.maxHp;
+      this.hasGun = false;
       this.refreshHud();
     }
     this.player.setAlpha(1);
-    this.invuln = 0;
+    this.invuln = 1.0;
   }
 
   private tryDash(): void {
     if (this.dashCd <= 0 && this.dashT <= 0) {
       this.dashT = FEEL.dashTime;
+      this.dashCd = FEEL.dashCooldown;
+      this.setSlide(true);
     }
+  }
+
+  /** Achica el body para pasar túneles de 1 tile; al terminar intenta pararse. */
+  private setSlide(on: boolean): void {
+    const body = this.player?.body as Phaser.Physics.Arcade.Body | undefined;
+    if (!body) return;
+    if (on) {
+      this.sliding = true;
+      body.setSize(14, FEEL.slideH);
+      return;
+    }
+    if (!this.sliding) return;
+    if (this.canStand()) {
+      body.setSize(14, 26);
+      this.sliding = false;
+    }
+  }
+
+  /** Hay 14x26 libres alrededor del jugador para volver a ponerse de pie. */
+  private canStand(): boolean {
+    const hw = 7;
+    const top = this.player.y - 13;
+    const bottom = this.player.y + 13;
+    const left = Math.floor((this.player.x - hw) / T);
+    const right = Math.floor((this.player.x + hw) / T);
+    for (let ty = Math.floor(top / T); ty <= Math.floor((bottom - 1) / T); ty++) {
+      for (let tx = left; tx <= right; tx++) {
+        if (this.solidSet.has(`${tx},${ty}`)) return false;
+      }
+    }
+    return true;
+  }
+
+  /** Caja de poder: solo rompe con cabezazo desde abajo. Da disparo infinito. */
+  private hitBox(box: Phaser.Physics.Arcade.Image): void {
+    if (box.getData('broken') === true) return;
+    const pb = this.player.body as Phaser.Physics.Arcade.Body;
+    const qb = box.body as Phaser.Physics.Arcade.Body;
+    const headbutt = (pb.blocked.up || pb.touching.up) && (qb.blocked.down || qb.touching.down);
+    if (!headbutt) return;
+    box.setData('broken', true);
+    box.disableBody(true, true);
+    this.boxes = this.boxes.filter((b) => b !== box);
+    if (!this.hasGun) {
+      this.hasGun = true;
+      this.refreshHud();
+    }
+    this.showMsg('¡Poder de fuego! X para disparar');
+  }
+
+  private tryShoot(): void {
+    if (!this.hasGun || this.won || !this.player?.active) return;
+    if (this.shootCd > 0) return;
+    this.shootCd = FEEL.shootCooldown;
+    const img = this.physics.add.image(this.player.x + this.facing * 10, this.player.y, 'fire', 0);
+    const b = img.body as Phaser.Physics.Arcade.Body;
+    b.setAllowGravity(false);
+    b.setSize(12, 12);
+    const vx = this.facing * FEEL.bulletSpeed;
+    img.setVelocity(vx, 0);
+    const bullet: Bullet = { img, vx, startX: img.x };
+    this.bullets.push(bullet);
+    this.physics.add.collider(img, this.boxes);
+    for (const w of this.walkers) {
+      this.physics.add.overlap(img, w.spr, () => {
+        this.killEnemy(w.spr);
+        this.removeBullet(bullet);
+      });
+    }
+    for (const f of this.flyers) {
+      this.physics.add.overlap(img, f.spr, () => {
+        this.killEnemy(f.spr);
+        this.removeBullet(bullet);
+      });
+    }
+  }
+
+  private removeBullet(bullet: Bullet): void {
+    if (!bullet.img.active) return;
+    bullet.img.destroy();
+    this.bullets = this.bullets.filter((x) => x !== bullet);
+  }
+
+  /** Elimina un enemigo (pisotón o bala) sin dañar al jugador. */
+  private killEnemy(spr: Phaser.Physics.Arcade.Sprite): void {
+    if (!spr.active) return;
+    this.walkers = this.walkers.filter((w) => {
+      if (w.spr === spr) {
+        w.spr.destroy();
+        return false;
+      }
+      return true;
+    });
+    this.flyers = this.flyers.filter((f) => {
+      if (f.spr === spr) {
+        f.spr.destroy();
+        return false;
+      }
+      return true;
+    });
+  }
+
+  /** Contacto con enemigo: pisotón con rebote alto si cae encima, daño si no. */
+  private hitEnemy(spr: Phaser.Physics.Arcade.Sprite): void {
+    if (!spr.active || this.won) return;
+    const pb = this.player.body as Phaser.Physics.Arcade.Body;
+    const eb = spr.body as Phaser.Physics.Arcade.Body;
+    const falling = pb.velocity.y > 50;
+    const stomp = falling && pb.bottom - eb.top < 12;
+    if (stomp) {
+      this.killEnemy(spr);
+      this.player.setVelocityY(-FEEL.stompBounce);
+      this.buffer = 0;
+      this.djUsed = false;
+      this.showMsg('¡Pisotón!');
+      return;
+    }
+    this.damage(1, spr.x);
   }
 
   private standingOn(plat: Phaser.Physics.Arcade.Sprite): boolean {
@@ -651,15 +824,25 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
-  /** Baja hasta 6 tiles buscando piso: devuelve centro del jugador apoyado. */
+  /** Busca piso debajo: si el punto está en sólido sube, si no hay piso no usa centro de tile sólido. */
   private snapToGround(tx: number, ty: number): { x: number; y: number } {
     const level = this.currentLevel;
+    const solidAt = (x: number, y: number): boolean =>
+      level.tiles.some((t) => t.t === 'ground' && t.x === x && t.y === y);
+    let baseY = ty;
+    for (let u = 0; u <= 4 && solidAt(tx, baseY); u++) baseY--;
     for (let d = 0; d <= 6; d++) {
-      if (level.tiles.some((t) => t.t === 'ground' && t.x === tx && t.y === ty + d)) {
-        return { x: tx * T + T / 2, y: (ty + d) * T - 14 };
+      if (solidAt(tx, baseY + d)) {
+        return { x: tx * T + T / 2, y: (baseY + d) * T - 13 };
       }
     }
-    return { x: tx * T + T / 2, y: ty * T + T / 2 };
+    // Sin piso debajo: centro de la primera celda libre, nunca dentro de sólido.
+    for (let u = 0; u <= 6; u++) {
+      if (!solidAt(tx, baseY - u)) {
+        return { x: tx * T + T / 2, y: (baseY - u) * T + T / 2 };
+      }
+    }
+    return { x: tx * T + T / 2, y: baseY * T - 13 };
   }
 
   override update(_time: number, deltaMs: number): void {
@@ -677,6 +860,7 @@ export class GameScene extends Phaser.Scene {
     const onFloor = body.blocked.down || body.touching.down;
 
     this.dashCd = Math.max(0, this.dashCd - delta);
+    this.shootCd = Math.max(0, this.shootCd - delta);
     const left = this.cursors.left.isDown || touchState.left;
     const right = this.cursors.right.isDown || touchState.right;
     const dir = (right ? 1 : 0) - (left ? 1 : 0);
@@ -686,13 +870,15 @@ export class GameScene extends Phaser.Scene {
       this.buffer = FEEL.jumpBuffer;
     }
 
-    // Dash (J o boton B).
+    // Dash-deslizamiento (J o boton B): achica el body para túneles de 1 tile.
     if (Phaser.Input.Keyboard.JustDown(this.keyJ)) this.tryDash();
+    if (Phaser.Input.Keyboard.JustDown(this.keyShoot)) this.tryShoot();
     if (this.dashT > 0) {
-      if (this.dashCd <= 0) this.dashCd = FEEL.dashCooldown;
       this.dashT -= delta;
       this.player.setVelocity(this.facing * FEEL.dashSpeed, 0);
+      if (this.dashT <= 0) this.setSlide(false);
     } else {
+      if (this.sliding) this.setSlide(false);
       this.player.setVelocityX(dir * FEEL.speed);
       if (!onFloor) {
         this.coyote -= delta;
@@ -735,10 +921,34 @@ export class GameScene extends Phaser.Scene {
       w.spr.setFlipX(w.dir < 0);
     }
 
-    // Flyers: seno.
+    // Flyers: lateral por defecto (eje x, 3 tiles), vertical solo si axis==='y'.
     for (const f of this.flyers) {
+      if (!f.spr.active) continue;
       f.t += delta;
-      f.spr.setPosition(f.baseX, f.baseY + Math.sin(f.t * f.freq * Math.PI * 2) * f.ampPx);
+      if (f.axis === 'y') {
+        f.spr.setPosition(f.baseX, f.baseY + Math.sin(f.t * f.freq * Math.PI * 2) * f.ampPx);
+      } else {
+        const nx = f.baseX + Math.sin(f.t * f.freq * Math.PI * 2) * f.rangePx;
+        f.spr.setPosition(nx, f.baseY + Math.sin(f.t * 2 * Math.PI * 2) * 3);
+        const dx = nx - f.prevX;
+        if (Math.abs(dx) > 0.05) f.spr.setFlipX(dx < 0);
+        f.prevX = nx;
+      }
+    }
+
+    // Balas: alcance 10 tiles, mueren contra paredes o al superar rango.
+    const bulletRange = FEEL.bulletRangeTiles * T;
+    for (const b of [...this.bullets]) {
+      if (!b.img.active) {
+        this.bullets = this.bullets.filter((x) => x !== b);
+        continue;
+      }
+      const bb = b.img.body as Phaser.Physics.Arcade.Body;
+      const btx = Math.floor(b.img.x / T);
+      const bty = Math.floor(b.img.y / T);
+      if (Math.abs(b.img.x - b.startX) > bulletRange || bb.blocked.left || bb.blocked.right || this.solidSet.has(`${btx},${bty}`)) {
+        this.removeBullet(b);
+      }
     }
 
     // Plataformas móviles: cinemáticas (posición, no velocidad) + arrastre exacto.
