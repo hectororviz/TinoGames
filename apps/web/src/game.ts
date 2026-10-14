@@ -368,7 +368,7 @@ export class GameScene extends Phaser.Scene {
           const skin = POWERUPS.find((d) => d.id === (props['skin'] as string | undefined)) ?? POWERUPS[0];
           const spr = boxes.create(cx, cy, skin.key) as Phaser.Physics.Arcade.Image;
           spr.refreshBody();
-          (spr.body as Phaser.Physics.Arcade.Body).setImmovable(true);
+          // Grupo estático: ya es inamovible (StaticBody no tiene setImmovable).
           spr.setData('broken', false);
           this.boxes.push(spr);
           break;
@@ -771,7 +771,7 @@ export class GameScene extends Phaser.Scene {
 
   private removeBullet(bullet: Bullet): void {
     if (!bullet.img.active) return;
-    bullet.img.destroy();
+    bullet.img.disableBody(true, true);
     this.bullets = this.bullets.filter((x) => x !== bullet);
   }
 
@@ -780,14 +780,15 @@ export class GameScene extends Phaser.Scene {
     if (!spr.active) return;
     this.walkers = this.walkers.filter((w) => {
       if (w.spr === spr) {
-        w.spr.destroy();
+        // disableBody (no destroy): los overlaps ya registrados siguen válidos.
+        w.spr.disableBody(true, true);
         return false;
       }
       return true;
     });
     this.flyers = this.flyers.filter((f) => {
       if (f.spr === spr) {
-        f.spr.destroy();
+        f.spr.disableBody(true, true);
         return false;
       }
       return true;
