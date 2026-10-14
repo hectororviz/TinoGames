@@ -13,6 +13,8 @@ export const FEEL = {
   dashSpeed: 260,
   dashTime: 0.25,
   dashCooldown: 0.8,
+  /** Patrulla lateral de flyers en px/s. */
+  flyerSpeed: 50,
   /** Alto del body agachado durante el dash-deslizamiento (entra en 1 tile). */
   slideH: 14,
   /** Rebote alto del pisotón (salto normal 320, trampolín 460). */

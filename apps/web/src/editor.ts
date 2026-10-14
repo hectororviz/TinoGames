@@ -1196,6 +1196,7 @@ export class EditorScene extends Phaser.Scene {
         } else {
           props['axis'] = 'x';
           props['range'] = 3;
+          props['speed'] = 50;
         }
         return { kind: skin.kind, props };
       }

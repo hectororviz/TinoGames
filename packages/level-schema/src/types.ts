@@ -54,6 +54,8 @@ export interface FlyerProps {
   axis?: string;
   /** Recorrido lateral en tiles (eje x). Por defecto 3. */
   range?: number;
+  /** Velocidad lateral en px/s (eje x). Por defecto 50. */
+  speed?: number;
   /** Amplitud vertical en tiles. Por defecto 2. */
   amp?: number;
   /** Oscilaciones por segundo. Por defecto 1. */

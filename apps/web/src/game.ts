@@ -12,6 +12,7 @@ import {
   DECOS,
   ENEMIES,
   EXIT_DOOR,
+  FIREBALL,
   FRUITS,
   FRUIT_SHEETS,
   GEMS,
@@ -47,7 +48,8 @@ interface Flyer {
   t: number;
   axis: 'x' | 'y';
   rangePx: number;
-  prevX: number;
+  dir: number;
+  speed: number;
 }
 
 interface Bullet {
@@ -167,6 +169,7 @@ export class GameScene extends Phaser.Scene {
     this.load.image('rock', OBSTACLES.find((o) => o.id === 'rock')!.image!.url);
     this.load.image('spikehead', OBSTACLES.find((o) => o.id === 'spikehead')!.image!.url);
     this.load.image(TRAMP_IDLE.key, TRAMP_IDLE.url);
+    this.load.image(FIREBALL.key, FIREBALL.url);
     for (const g of GEMS) this.load.image(g.key, g.url);
     this.load.image(CHECKPOINT.off.key, CHECKPOINT.off.url);
     this.load.image(EXIT_DOOR.idle.key, EXIT_DOOR.idle.url);
@@ -339,7 +342,8 @@ export class GameScene extends Phaser.Scene {
             t: Math.random() * 10,
             axis,
             rangePx: ((props['range'] as number | undefined) ?? 3) * T,
-            prevX: cx,
+            dir: 1,
+            speed: ((props['speed'] as number | undefined) ?? FEEL.flyerSpeed),
           });
           break;
         }
@@ -699,12 +703,20 @@ export class GameScene extends Phaser.Scene {
     const body = this.player?.body as Phaser.Physics.Arcade.Body | undefined;
     if (!body) return;
     if (on) {
+      if (this.sliding) return;
       this.sliding = true;
-      body.setSize(14, FEEL.slideH);
+      // OJO: el body escala con el sprite. Con squash 0.7 hay que sobredimensionar
+      // en coords fuente para que el body efectivo quede 14x14 con los pies plantados
+      // donde estaban parado (fondo del body a 13px del centro).
+      body.setSize(14, 20, false);
+      body.setOffset(9, 14.6);
+      this.player.setScale(1, 0.7);
       return;
     }
     if (!this.sliding) return;
     if (this.canStand()) {
+      // Restaurar escala ANTES del tamaño, si no el body hereda la deformación.
+      this.player.setScale(1);
       body.setSize(14, 26);
       this.sliding = false;
     }
@@ -746,7 +758,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.hasGun || this.won || !this.player?.active) return;
     if (this.shootCd > 0) return;
     this.shootCd = FEEL.shootCooldown;
-    const img = this.physics.add.image(this.player.x + this.facing * 10, this.player.y, 'fire', 0);
+    const img = this.physics.add.image(this.player.x + this.facing * 10, this.player.y, FIREBALL.key);
     const b = img.body as Phaser.Physics.Arcade.Body;
     b.setAllowGravity(false);
     b.setSize(12, 12);
@@ -922,18 +934,23 @@ export class GameScene extends Phaser.Scene {
       w.spr.setFlipX(w.dir < 0);
     }
 
-    // Flyers: lateral por defecto (eje x, 3 tiles), vertical solo si axis==='y'.
+    // Flyers: patrulla lateral a velocidad constante (eje x), seno solo si axis==='y'.
     for (const f of this.flyers) {
       if (!f.spr.active) continue;
       f.t += delta;
       if (f.axis === 'y') {
         f.spr.setPosition(f.baseX, f.baseY + Math.sin(f.t * f.freq * Math.PI * 2) * f.ampPx);
       } else {
-        const nx = f.baseX + Math.sin(f.t * f.freq * Math.PI * 2) * f.rangePx;
-        f.spr.setPosition(nx, f.baseY + Math.sin(f.t * 2 * Math.PI * 2) * 3);
-        const dx = nx - f.prevX;
-        if (Math.abs(dx) > 0.05) f.spr.setFlipX(dx < 0);
-        f.prevX = nx;
+        f.spr.x += f.dir * f.speed * delta;
+        if (f.spr.x - f.baseX > f.rangePx) {
+          f.spr.x = f.baseX + f.rangePx;
+          f.dir = -1;
+        } else if (f.spr.x - f.baseX < -f.rangePx) {
+          f.spr.x = f.baseX - f.rangePx;
+          f.dir = 1;
+        }
+        f.spr.y = f.baseY + Math.sin(f.t * Math.PI * 2) * 3;
+        f.spr.setFlipX(f.dir < 0);
       }
     }
 

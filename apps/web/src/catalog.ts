@@ -47,6 +47,7 @@ import rockUrl from '../../../assets/traps/trap-rockhead.png?url';
 import spikeheadUrl from '../../../assets/traps/trap-spikehead.png?url';
 import trampIdleUrl from '../../../assets/traps/trampoline-idle.png?url';
 import trampJumpUrl from '../../../assets/traps/trampoline-jump.png?url';
+import fireballUrl from '../../../assets/items/fireball.png?url';
 import box1Url from '../../../assets/deco/deco-box1.png?url';
 import box2Url from '../../../assets/deco/deco-box2.png?url';
 import box3Url from '../../../assets/deco/deco-box3.png?url';
@@ -229,6 +230,9 @@ export const OBSTACLES: ObstacleDef[] = [
 ];
 
 export const TRAMP_IDLE = { key: 'tramp-idle', url: trampIdleUrl };
+
+/** Bola de fuego del disparo (asset propio 16x16). */
+export const FIREBALL = { key: 'fireball', url: fireballUrl };
 
 export const DECOS: { id: string; label: string; key: string; url: string; w: number; h: number }[] = [
   { id: 'box1', label: 'Caja 1', key: 'deco-box1', url: box1Url, w: 28, h: 24 },
