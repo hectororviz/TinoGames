@@ -39,7 +39,9 @@ export interface RemoteLevel extends RemoteLevelMeta {
 }
 
 async function req<T>(path: string, init?: RequestInit, auth = true): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = {};
+  // Sin body no se manda Content-Type: Fastify 400ea el JSON vacío.
+  if (init?.body !== undefined) headers['Content-Type'] = 'application/json';
   if (auth) {
     const token = getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;

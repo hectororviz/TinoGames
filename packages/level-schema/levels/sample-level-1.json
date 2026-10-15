@@ -88,7 +88,7 @@
       "y": 5,
       "props": { "axis": "x", "range": 2, "speed": 50, "amp": 1, "freq": 1.5 }
     },
-    { "kind": "fruit", "x": 5, "y": 6, "props": { "skin": "apple" } },
+    { "kind": "fruit", "x": 5, "y": 6, "props": { "skin": "bananas" } },
     { "kind": "brick", "x": 5, "y": 5 },
     { "kind": "brick", "x": 6, "y": 5 },
     {

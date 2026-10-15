@@ -20,9 +20,9 @@ function solidAt(solids: Set<string>, x: number, y: number): boolean {
  *   pintar 1 tile arriba del piso y caer al probar, sin quedar embebido).
  * - exit con tile solido (ground) justo debajo.
  * - flyer / item en el aire (la celda no es solida).
- * - spikes y obstaculos (saw/fire/arrow/rock/spikehead/trampoline): estaticos,
- *   se pueden poner en cualquier ubicacion en aire (solo se rechaza si quedan
- *   dentro de solido).
+ * - spikes y obstaculos (saw/fire/rock/spikehead/trampoline): la roca cae
+ *   al acercarse (enemigo); el resto estaticos en aire (solo se rechaza si
+ *   quedan dentro de solido).
  * - powerup (bloques box1/box2/box3): se cabecean desde abajo, sueltan hongo.
  *   Solo exigen no estar en solido. 'item' legacy se trata como fruta.
  * - brick (ladrillo): se cabecea desde abajo; chico rebota, grande rompe.
@@ -177,7 +177,6 @@ export function validateLevel(level: Level): ValidationError[] {
           variant !== 'spikes' &&
           variant !== 'saw' &&
           variant !== 'fire' &&
-          variant !== 'arrow' &&
           variant !== 'rock' &&
           variant !== 'spikehead' &&
           variant !== 'trampoline'

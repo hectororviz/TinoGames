@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""Arte cartoon del jueguito (estilo plano).
-Genera en ../art/: kid.png (5 poses 48px), bg_sky.png, bg_hills.png.
-Re-ejecutable: python3 gen_art.py
+"""Arte propio del juego (fondos y tuberías). Re-ejecutable: python3 gen_art.py
 """
 import math
 import struct
@@ -61,60 +59,6 @@ class C:
         print("art/" + name)
 
 
-def draw_kid(c, ox, leg_ldx, leg_rdx, bob, arms_up, tuck):
-    """Celda 48px en ox. Pies en y=46. Mirando a la derecha."""
-    dy = -bob
-    if tuck:  # piernas recogidas (salto)
-        c.rect(ox + 19, 38 + dy, ox + 23, 43 + dy, JEANS)
-        c.rect(ox + 24, 38 + dy, ox + 28, 43 + dy, JEANS)
-    else:
-        c.rect(ox + 19 + leg_ldx, 34 + dy, ox + 23 + leg_ldx, 44 + dy, JEANS)
-        c.rect(ox + 24 + leg_rdx, 34 + dy, ox + 28 + leg_rdx, 44 + dy, JEANS)
-        c.rect(ox + 19 + leg_ldx, 42 + dy, ox + 23 + leg_ldx, 46 + dy, BOOT)
-        c.rect(ox + 24 + leg_rdx, 42 + dy, ox + 28 + leg_rdx, 46 + dy, BOOT)
-    # Mochila (atrás = izquierda).
-    c.rect(ox + 9, 20 + dy, ox + 15, 34 + dy, PACK)
-    c.rect(ox + 9, 20 + dy, ox + 15, 23 + dy, INK)
-    # Buzo.
-    c.rect(ox + 16, 18 + dy, ox + 31, 36 + dy, HOOD)
-    c.rect(ox + 16, 18 + dy, ox + 31, 21 + dy, HOOD_D)
-    c.rect(ox + 20, 26 + dy, ox + 27, 32 + dy, POCKET)
-    if arms_up:
-        c.rect(ox + 14, 12 + dy, ox + 17, 22 + dy, HOOD_D)
-        c.rect(ox + 30, 12 + dy, ox + 33, 22 + dy, HOOD_D)
-        c.px(ox + 15, 11 + dy, SKIN)
-        c.px(ox + 31, 11 + dy, SKIN)
-    else:
-        c.rect(ox + 12, 20 + dy, ox + 15, 30 + dy, HOOD_D)
-        c.rect(ox + 32, 20 + dy, ox + 35, 28 + dy, HOOD_D)
-        c.px(ox + 13, 31 + dy, SKIN)
-        c.px(ox + 33, 29 + dy, SKIN)
-    # Cabeza + gorra.
-    c.disc(ox + 24, 11 + dy, 10, INK)
-    c.disc(ox + 24, 11 + dy, 9, SKIN)
-    c.disc(ox + 24, 8 + dy, 9, CAP)  # gorra arriba
-    c.rect(ox + 15, 7 + dy, ox + 33, 9 + dy, CAP)
-    c.rect(ox + 28, 9 + dy, ox + 38, 12 + dy, CAP)  # visera
-    c.rect(ox + 23, 2 + dy, ox + 25, 5 + dy, INK)  # botón
-    # Cara mirando a la derecha.
-    c.rect(ox + 26, 10 + dy, ox + 30, 13 + dy, WHITE)
-    c.rect(ox + 28, 11 + dy, ox + 29, 13 + dy, INK)
-    c.rect(ox + 24, 16 + dy, ox + 29, 17 + dy, INK)  # sonrisa
-
-
-def gen_kid():
-    c = C(48 * 5, 48)
-    poses = [
-        (0, 0, 0, False, False),    # idle
-        (-3, 3, 1, False, False),   # run 0
-        (3, -3, 0, False, False),   # run 1
-        (0, 0, 0, True, True),      # jump
-        (0, 0, 0, False, False),    # fall (piernas abajo, brazos abajo)
-    ]
-    for i, (ll, lr, bob, up, tuck) in enumerate(poses):
-        draw_kid(c, i * 48, ll, lr, bob, up, tuck)
-    c.save("kid.png")
-
 
 def gen_sky():
     c = C(480, 270)
@@ -133,16 +77,6 @@ def gen_sky():
         c.disc(bx + w - 18, by + 2, 12, WHITE)
     c.save("bg_sky.png")
 
-
-def gen_heart():
-    c = C(14, 14)
-    for y, row in enumerate([".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."]):
-        for x, ch in enumerate(row):
-            if ch == "X":
-                c.rect(x * 2, 1 + y * 2, x * 2 + 1, 2 + y * 2, (217, 69, 82, 255))
-    c.px(2, 3, WHITE)
-    c.px(3, 3, WHITE)
-    c.save("heart.png")
 
 
 def gen_hills():
@@ -187,10 +121,8 @@ def gen_pipes():
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "pipes").mkdir(parents=True, exist_ok=True)
-    gen_kid()
     gen_sky()
     gen_hills()
-    gen_heart()
     gen_pipes()
 
 

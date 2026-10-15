@@ -1,23 +1,18 @@
-/** Grupos de variantes de piso (generado: ver spec paso 5). */
+/** Grupos de variantes de piso (ordenados como cubo 3x3 para el flyout). */
 export interface PisoGroup { name: string; variants: number[]; }
 
 export const PISO_GROUPS: PisoGroup[] = [
-  { name: 'Base', variants: [0,1,2,3,4,5,6,7,8,9] },
-  { name: 'Piedra', variants: [10,11,12,32,33,34,54,55,56] },
-  { name: 'Hierba', variants: [13,14,15,35,36,37,57,58,59] },
-  { name: 'Madera', variants: [17,18,19,39,40,41,61,62,63] },
-  { name: 'Tierra roja', variants: [20,21,22,42,43,44,64,65,66] },
-  { name: 'Rosa', variants: [23,24,25,45,46,47,67,68,69] },
-  { name: 'Dorado', variants: [26,27,28,48,49,50,70,71,72] },
-  { name: 'Plataforma', variants: [29,30,31,51,52,53,73,74,75] },
-  { name: 'Marco', variants: [98,99,100,120,121,122,142,143,144] },
-  { name: 'Tierra naranja', variants: [101,102,103,123,124,125,145,146,147] },
-  { name: 'Barro rojo', variants: [105,106,107,127,128,129,149,150,151] },
-  { name: 'Metal', variants: [108,109,110,130,131,132,152,153,154] },
-  { name: 'Ladrillo', variants: [111,112,113,114,115,116,117,118,119,133,134,135,136,137,138,139,140,141,155,156,157,158,159,160,161,162,163] },
-  { name: 'Agua', variants: [186,187,188,208,209,210,230,231,232] },
-  { name: 'Arena', variants: [189,190,191,211,212,213,233,234,235] },
-  { name: 'Naranja', variants: [193,194,195,215,216,217,237,238,239] },
-  { name: 'Amarillo', variants: [202,203,204,205,206,207,224,225,226,227,228,229,246,247,248,249,250,251] },
-  { name: 'Varios', variants: [16,38,60,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,104,126,148,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,192,196,197,198,199,200,201,214,218,219,220,221,222,223,236,240,241,242,243,244,245] },
+  { name: 'Piso', variants: [2, 1, 3, 9, 0, 40, 6, 61, 7] },
+  { name: 'Ladrillos', variants: [116, 118] },
+  { name: 'Piso Naranja', variants: [104, 105, 106, 126, 127, 128, 148, 149, 150] },
+  { name: 'Piso Rojo', variants: [192, 193, 194, 214, 215, 216, 236, 237, 238] },
+  { name: 'Plat. Roja', variants: [22, 23, 24] },
+  { name: 'Plat. Metal', variants: [110, 111, 112] },
+  { name: 'Plat. Naranja', variants: [198, 199, 200] },
+  { name: 'Plat. fina', variants: [49, 50, 51] },
+  { name: 'Plat. Cadena', variants: [71, 72, 73] },
+  { name: 'Agua', variants: [186, 187, 188, 208, 209, 210, 230, 231, 232] },
+  { name: 'Cueva', variants: [10, 11, 12, 32, 33, 34, 54, 55, 56] },
+  { name: 'Madera', variants: [98, 99, 100, 120, 121, 122, 142, 143, 144] },
+  { name: 'Otros', variants: [132, 220, 225] },
 ];

@@ -69,7 +69,7 @@ export class EditorScene extends Phaser.Scene {
   private tileVariant = 0;
   private playerSkin = 'pink';
   private enemySkin = 'pig';
-  private fruitSkin = 'apple';
+  private fruitSkin = 'bananas';
   private gemColor = 'purple';
   private platformAxis: 'x' | 'y' | 'fall' = 'x';
   private selected: Entity | null = null;
@@ -513,7 +513,7 @@ export class EditorScene extends Phaser.Scene {
         break;
       }
       case 'fruit':
-        this.selectField(panel, 'skin', typeof p['skin'] === 'string' ? (p['skin'] as string) : 'apple',
+        this.selectField(panel, 'skin', typeof p['skin'] === 'string' ? (p['skin'] as string) : 'bananas',
           FRUITS.map((f) => ({ id: f.id, label: f.label })), (v) => {
             this.setProp((pp) => {
               pp['skin'] = v;
@@ -642,7 +642,7 @@ export class EditorScene extends Phaser.Scene {
         return { tex: gem.key, h: 14, fh: 32 };
       }
       case 'item':
-        return { tex: 'apple', frame: 0, h: 14, fh: 32 };
+        return { tex: FRUITS[0].key, frame: 0, h: 14, fh: 32 };
       case 'checkpoint':
         return { tex: CHECKPOINT.off.key, h: 24, fh: 64 };
       case 'platform': {
@@ -656,7 +656,6 @@ export class EditorScene extends Phaser.Scene {
         const def = OBSTACLES.find((o) => o.id === variant) ?? OBSTACLES[0];
         if (def.id === 'saw') return { tex: def.tex!.key, frame: 0, h: 22, fh: 38 };
         if (def.id === 'fire') return { tex: def.tex!.key, frame: 0, h: 18, fh: 32 };
-        if (def.id === 'arrow') return { tex: def.tex!.key, frame: 0, h: 18, fh: 18 };
         if (def.id === 'trampoline') return { tex: TRAMP_IDLE.key, h: 18, fh: 28 };
         if (def.id === 'rock') return { tex: def.image!.key, h: 18, fh: 42 };
         if (def.id === 'spikehead') return { tex: def.image!.key, h: 18, fh: 52 };
@@ -679,7 +678,7 @@ export class EditorScene extends Phaser.Scene {
       case 'exit':
         return { tex: 'exit', h: 24, fh: 32 };
       default:
-        return { tex: 'apple', frame: 0, h: 14, fh: 32 };
+        return { tex: FRUITS[0].key, frame: 0, h: 14, fh: 32 };
     }
   }
 
@@ -1083,13 +1082,13 @@ export class EditorScene extends Phaser.Scene {
 
   private buildObstaculosFlyout(fly: HTMLElement): void {
     const grid = this.fgrid(fly);
+    const byId = Object.fromEntries(OBSTACLES.map((o) => [o.id, o]));
     const dims: Record<string, [string, number, number, number]> = {
-      spikes: [OBSTACLES[0].image!.url, 16, 16, 1],
-      saw: [OBSTACLES[1].tex!.url, 38, 38, 8],
-      fire: [OBSTACLES[2].tex!.url, 16, 32, 3],
-      arrow: [OBSTACLES[3].tex!.url, 18, 18, 10],
-      rock: [OBSTACLES[4].image!.url, 42, 42, 1],
-      spikehead: [OBSTACLES[5].image!.url, 54, 52, 1],
+      spikes: [byId['spikes'].image!.url, 16, 16, 1],
+      saw: [byId['saw'].tex!.url, 38, 38, 8],
+      fire: [byId['fire'].tex!.url, 16, 32, 3],
+      rock: [byId['rock'].image!.url, 42, 42, 1],
+      spikehead: [byId['spikehead'].image!.url, 54, 52, 1],
       trampoline: [TRAMP_IDLE.url, 28, 28, 1],
     };
     for (const o of OBSTACLES) {
@@ -1525,7 +1524,8 @@ export class EditorScene extends Phaser.Scene {
       this.downY = pointer.y;
       this.lastPaintKey = '';
       this.strokeSnapshot = cloneLevel(this.level);
-      this.paintAt(pointer);
+      // Botón central: solo panea, nunca pinta.
+      if (!pointer.middleButtonDown()) this.paintAt(pointer);
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
@@ -1585,20 +1585,14 @@ export class EditorScene extends Phaser.Scene {
         deltaY: number,
         _deltaZ: number,
       ) => {
+        // Girar = zoom centrado en el cursor.
         const cam = this.cameras.main;
-        const ev = (pointer.event ?? {}) as { ctrlKey?: boolean; shiftKey?: boolean };
-        // Rueda mueve el canvas (Shift = horizontal); Ctrl+rueda = zoom.
-        if (ev.ctrlKey) {
-          const before = cam.getWorldPoint(pointer.x, pointer.y);
-          const next = Phaser.Math.Clamp(cam.zoom - deltaY * 0.001, 0.25, 4);
-          cam.setZoom(next);
-          const after = cam.getWorldPoint(pointer.x, pointer.y);
-          cam.scrollX += before.x - after.x;
-          cam.scrollY += before.y - after.y;
-          return;
-        }
-        if (ev.shiftKey) cam.scrollX += deltaY / cam.zoom;
-        else cam.scrollY += deltaY / cam.zoom;
+        const before = cam.getWorldPoint(pointer.x, pointer.y);
+        const next = Phaser.Math.Clamp(cam.zoom - deltaY * 0.001, 0.25, 4);
+        cam.setZoom(next);
+        const after = cam.getWorldPoint(pointer.x, pointer.y);
+        cam.scrollX += before.x - after.x;
+        cam.scrollY += before.y - after.y;
       },
     );
 

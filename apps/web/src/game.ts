@@ -86,6 +86,16 @@ interface Mover {
   prevY: number;
 }
 
+/** Roca que cae del cielo al acercarse el jugador (estilo SMB): espera
+ * flotando, se desploma, descansa y vuelve a subir. Siempre daña. */
+interface DropRock {
+  spr: Phaser.Physics.Arcade.Sprite;
+  homeX: number;
+  homeY: number;
+  state: 'idle' | 'falling' | 'rest' | 'rising';
+  timer: number;
+}
+
 /** Hongo móvil que sale de los bloques "?". Camina y agranda al tocarlo. */
 interface Shroom {
   spr: Phaser.Physics.Arcade.Sprite;
@@ -169,6 +179,7 @@ export class GameScene extends Phaser.Scene {
   private blocks: Phaser.Physics.Arcade.Image[] = [];
   private bricks: Phaser.Physics.Arcade.Image[] = [];
   private shrooms: Shroom[] = [];
+  private drocks: DropRock[] = [];
   private pipes: Pipe[] = [];
   private pipeSolids: Phaser.Physics.Arcade.Image[] = [];
   private solidGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -278,6 +289,7 @@ export class GameScene extends Phaser.Scene {
     this.blocks = [];
     this.bricks = [];
     this.shrooms = [];
+    this.drocks = [];
     this.pipes = [];
     this.pipeSolids = [];
     this.pipeCd = 0;
@@ -561,6 +573,8 @@ export class GameScene extends Phaser.Scene {
     });
     for (const w of this.walkers) this.physics.add.overlap(this.player, w.spr, () => this.hitEnemy(w.spr));
     for (const f of this.flyers) this.physics.add.overlap(this.player, f.spr, () => this.hitEnemy(f.spr));
+    // Rocas caedoras: siempre dañan (ni pisotón las mata).
+    for (const r of this.drocks) this.physics.add.overlap(this.player, r.spr, () => this.damage());
     for (const c of this.checkpoints) {
       this.physics.add.overlap(this.player, c, () => this.activateCheckpoint(c));
     }
@@ -663,7 +677,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Obstáculo en (x,y): estático siempre; los animados con frames manuales. */
+  /** Obstáculo en (x,y): estático siempre, salvo la roca (cae al acercarse). */
   private addHazard(
     hazards: Phaser.GameObjects.Group,
     spikes: Phaser.GameObjects.Group,
@@ -671,6 +685,10 @@ export class GameScene extends Phaser.Scene {
     x: number,
     y: number,
   ): void {
+    if (variant === 'rock') {
+      this.spawnDropRock(x, y);
+      return;
+    }
     if (variant === 'spikes') {
       const s = spikes.create(x, y, 'spike') as Phaser.Physics.Arcade.Image;
       s.refreshBody();
@@ -691,7 +709,7 @@ export class GameScene extends Phaser.Scene {
     const spr = hazards.create(x, y, key, 0) as Phaser.Physics.Arcade.Image;
     spr.refreshBody();
     (spr.body as Phaser.Physics.Arcade.Body).setSize(def.bw, def.bh);
-    if (def.tex) this.addLoop(spr, def.tex.key, def.tex.frames, def.id === 'arrow' ? 6 : 12);
+    if (def.tex) this.addLoop(spr, def.tex.key, def.tex.frames, 12);
   }
 
   /** Anima en loop un sprite estático. */
@@ -896,6 +914,21 @@ export class GameScene extends Phaser.Scene {
       yoyo: true,
       onUpdate: () => brick.refreshBody(),
     });
+  }
+
+  /** Roca caedora: flota hasta que el jugador se acerca (1 tile), se
+   * desploma, descansa y vuelve a subir. Como el thwomp: siempre daña. */
+  private spawnDropRock(x: number, y: number): void {
+    const def = OBSTACLES.find((o) => o.id === 'rock')!;
+    const spr = this.physics.add.sprite(x, y, def.image!.key);
+    const b = spr.body as Phaser.Physics.Arcade.Body;
+    b.setSize(def.bw, def.bh);
+    b.setAllowGravity(false);
+    b.setImmovable(true);
+    const rock: DropRock = { spr, homeX: x, homeY: y, state: 'idle', timer: 0 };
+    this.drocks.push(rock);
+    if (this.solidGroup) this.physics.add.collider(spr, this.solidGroup);
+    this.physics.add.collider(spr, this.pipeSolids);
   }
 
   /** Hongo móvil: sale del bloque, camina con gravedad y agranda al tocarlo. */
@@ -1255,6 +1288,43 @@ export class GameScene extends Phaser.Scene {
       w.spr.setFlipX(w.faceLeft ? w.dir > 0 : w.dir < 0);
     }
 
+    // Rocas caedoras: esperan, se desploman al acercarse, descansan y suben.
+    for (const r of this.drocks) {
+      if (!r.spr.active) continue;
+      const rb = r.spr.body as Phaser.Physics.Arcade.Body;
+      const dx = Math.abs(this.player.x - r.spr.x);
+      const below = this.player.y > r.spr.y - 8;
+      if (r.state === 'idle') {
+        if (dx <= 1.5 * T && below) {
+          r.state = 'falling';
+          rb.setAllowGravity(true);
+          rb.setImmovable(false);
+          rb.setMaxVelocity(0, 420);
+          r.spr.setVelocity(0, 60);
+        }
+      } else if (r.state === 'falling') {
+        if (rb.blocked.down) {
+          r.state = 'rest';
+          r.timer = 0.8;
+          r.spr.setVelocity(0, 0);
+          rb.setAllowGravity(false);
+          rb.setImmovable(true);
+        } else if (r.spr.y > this.killY) {
+          // Cayó al vacío: reaparece arriba.
+          r.state = 'rising';
+        }
+      } else if (r.state === 'rest') {
+        r.timer -= delta;
+        if (r.timer <= 0) r.state = 'rising';
+      } else {
+        r.spr.y -= 70 * delta;
+        if (r.spr.y <= r.homeY) {
+          r.spr.setPosition(r.homeX, r.homeY);
+          r.spr.setVelocity(0, 0);
+          r.state = 'idle';
+        }
+      }
+    }
     // Hongos móviles: caminan con gravedad, giran en pared/borde, mueren abajo.
     for (const s of [...this.shrooms]) {
       if (!s.spr.active) {

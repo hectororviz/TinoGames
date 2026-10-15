@@ -1,7 +1,4 @@
 /** Catálogo de sprites del pack Pixel Adventure (juego + editor). */
-import pinkUrl from '../../../assets/pink.png?url';
-import appleUrl from '../../../assets/Apple.png?url';
-import strawberryUrl from '../../../assets/Strawberry.png?url';
 import tilesPaUrl from '../../../assets/tiles_pa.png?url';
 import terrainPaUrl from '../../../assets/vendor_pa_terrain.png?url';
 import vendorSpikeUrl from '../../../assets/vendor_pa_spike.png?url';
@@ -38,11 +35,9 @@ import checkpointOff from '../../../assets/items/checkpoint-off.png?url';
 import checkpointOn from '../../../assets/items/checkpoint-on.png?url';
 import endIdle from '../../../assets/items/end-idle.png?url';
 import endPressed from '../../../assets/items/end-pressed.png?url';
-import platBrown from '../../../assets/items/plat-brownon32x8.png?url';
 import platGrey from '../../../assets/items/plat-greyon32x8.png?url';
 import platFall from '../../../assets/items/plat-on32x10.png?url';
 import bgBlue from '../../../assets/bg/bg-blue.png?url';
-import arrowUrl from '../../../assets/traps/arrow.png?url';
 import rockUrl from '../../../assets/traps/trap-rockhead.png?url';
 import spikeheadUrl from '../../../assets/traps/trap-spikehead.png?url';
 import trampIdleUrl from '../../../assets/traps/trampoline-idle.png?url';
@@ -139,8 +134,6 @@ export const CHAR_SKINS: CharSkin[] = [
 
 /** Frutas = powerup estilo hongo: agrandan (chico 1 tile → grande ~2 tiles). */
 export const FRUITS: { id: string; label: string; key: string }[] = [
-  { id: 'apple', label: 'Manzana', key: 'apple' },
-  { id: 'strawberry', label: 'Frutilla', key: 'strawberry' },
   { id: 'bananas', label: 'Bananas', key: 'fruit-bananas' },
   { id: 'cherries', label: 'Cerezas', key: 'fruit-cherries' },
   { id: 'kiwi', label: 'Kiwi', key: 'fruit-kiwi' },
@@ -150,8 +143,6 @@ export const FRUITS: { id: string; label: string; key: string }[] = [
 ];
 
 export const FRUIT_SHEETS: SheetDef[] = [
-  sheet('apple', appleUrl, 32, 32, 17),
-  sheet('strawberry', strawberryUrl, 32, 32, 17),
   sheet('fruit-bananas', fruitBananas, 32, 32, 17),
   sheet('fruit-cherries', fruitCherries, 32, 32, 17),
   sheet('fruit-kiwi', fruitKiwi, 32, 32, 17),
@@ -227,8 +218,7 @@ export const OBSTACLES: ObstacleDef[] = [
   { id: 'spikes', label: 'Pinchos', image: { key: 'spike', url: vendorSpikeUrl }, bw: 16, bh: 10 },
   { id: 'saw', label: 'Sierra', tex: sheet('saw', sawUrl, 38, 38, 8), bw: 30, bh: 30 },
   { id: 'fire', label: 'Fuego', tex: sheet('fire', fireUrl, 16, 32, 3), bw: 12, bh: 28 },
-  { id: 'arrow', label: 'Flecha', tex: sheet('arrow', arrowUrl, 18, 18, 10), bw: 14, bh: 14 },
-  { id: 'rock', label: 'Roca', image: { key: 'rock', url: rockUrl }, bw: 34, bh: 34 },
+  { id: 'rock', label: 'Roca (cae)', image: { key: 'rock', url: rockUrl }, bw: 34, bh: 34 },
   { id: 'spikehead', label: 'Cabeza pinchos', image: { key: 'spikehead', url: spikeheadUrl }, bw: 44, bh: 40 },
   { id: 'trampoline', label: 'Trampolín', tex: sheet('tramp-jump', trampJumpUrl, 28, 28, 8), bw: 24, bh: 12 },
 ];
@@ -268,11 +258,10 @@ export const EXIT_DOOR = {
   pressed: sheet('end-pressed', endPressed, 64, 64, 8),
 };
 export const PLATFORMS = {
-  mover: sheet('plat-brown', platBrown, 32, 8, 8),
+  mover: sheet('plat-grey', platGrey, 32, 8, 8),
   faller: sheet('plat-fall', platFall, 32, 10, 4),
 };
 export const BG_BLUE = { key: 'bg-blue', url: bgBlue };
-export const PINK_LEGACY = { key: 'pink', url: pinkUrl };
 
 export const BIOMES: Biome[] = [
   {

@@ -64,9 +64,11 @@
 - `tileSprite` sobre spritesheet muestra frames pegados: plataformas usan
   texturas 64px de frame único generadas por canvas.
 - Arte (`assets/`, Pixel Adventure 1+2 CC0 + Sunny Land bosque CC0 + generado
-  propio con `gen_art.py`): 4 personajes, 8 frutas-hongo, 3 monedas, 20
-  enemigos, 7 obstáculos, checkpoints, salida End, plataformas, tuberías,
-  252 variantes de piso, 6 biomas. Créditos en
+  propio con `gen_art.py`): 4 personajes, 6 frutas-hongo, 3 monedas, 20
+  enemigos, 6 obstáculos (la flecha se eliminó; la roca cae al acercarse),
+  checkpoints, salida End, plataformas grises, tuberías,
+  252 variantes de piso, 6 biomas. Catálogos en `docs/catalogo-pisos.pdf` y
+  `docs/catalogo-sprites.pdf`. Créditos en
   `assets/CREDITS_PIXELADVENTURE.md`.
 
 ## Hecho desde el portado Godot (no reabrir)

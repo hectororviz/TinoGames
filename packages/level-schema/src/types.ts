@@ -66,7 +66,7 @@ export interface FlyerProps {
 }
 
 export interface FruitProps {
-  /** Powerup estilo hongo (agranda): apple | strawberry | bananas | cherries | kiwi | melon | orange | pineapple. */
+  /** Powerup estilo hongo (agranda): bananas | cherries | kiwi | melon | orange | pineapple. */
   skin?: string;
 }
 
@@ -113,7 +113,7 @@ export interface SpikesProps {
   /** Alto en tiles (pared). Por defecto 1. */
   h?: number;
   /** Variante del obstaculo. Por defecto 'spikes'. */
-  variant?: 'spikes' | 'saw' | 'fire' | 'arrow' | 'rock' | 'spikehead' | 'trampoline';
+  variant?: 'spikes' | 'saw' | 'fire' | 'rock' | 'spikehead' | 'trampoline';
 }
 
 export interface ExitProps {
