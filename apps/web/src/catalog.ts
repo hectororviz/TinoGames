@@ -22,6 +22,10 @@ import charGuyIdle from '../../../assets/chars/char-virtualguy-idle.png?url';
 import charGuyRun from '../../../assets/chars/char-virtualguy-run.png?url';
 import charGuyJump from '../../../assets/chars/char-virtualguy-jump.png?url';
 import charGuyFall from '../../../assets/chars/char-virtualguy-fall.png?url';
+import charTuxIdle from '../../../assets/supertux/chars/char-tux-idle.png?url';
+import charTuxRun from '../../../assets/supertux/chars/char-tux-run.png?url';
+import charTuxJump from '../../../assets/supertux/chars/char-tux-jump.png?url';
+import charTuxFall from '../../../assets/supertux/chars/char-tux-fall.png?url';
 import fruitBananas from '../../../assets/fruits/fruit-bananas.png?url';
 import fruitCherries from '../../../assets/fruits/fruit-cherries.png?url';
 import fruitKiwi from '../../../assets/fruits/fruit-kiwi.png?url';
@@ -129,6 +133,13 @@ export const CHAR_SKINS: CharSkin[] = [
     run: sheet('char-guy-run', charGuyRun, 32, 32, 12),
     jump: sheet('char-guy-jump', charGuyJump, 32, 32, 1),
     fall: sheet('char-guy-fall', charGuyFall, 32, 32, 1),
+  },
+  {
+    id: 'tux', label: 'Tux (SuperTux GPL)',
+    idle: sheet('char-tux-idle', charTuxIdle, 32, 32, 1),
+    run: sheet('char-tux-run', charTuxRun, 32, 32, 8),
+    jump: sheet('char-tux-jump', charTuxJump, 32, 32, 3),
+    fall: sheet('char-tux-fall', charTuxFall, 32, 32, 5),
   },
 ];
 

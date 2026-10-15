@@ -67,7 +67,7 @@ export class EditorScene extends Phaser.Scene {
   private dirty = false;
   private tool: Tool | null = 'ground';
   private tileVariant = 0;
-  private playerSkin = 'pink';
+  private playerSkin = 'tux';
   private enemySkin = 'pig';
   private fruitSkin = 'bananas';
   private gemColor = 'purple';
@@ -532,7 +532,7 @@ export class EditorScene extends Phaser.Scene {
           });
         break;
       case 'player_start':
-        this.selectField(panel, 'skin', typeof p['skin'] === 'string' ? (p['skin'] as string) : 'pink',
+        this.selectField(panel, 'skin', typeof p['skin'] === 'string' ? (p['skin'] as string) : 'tux',
           CHAR_SKINS.map((c) => ({ id: c.id, label: c.label })), (v) => {
             this.setProp((pp) => {
               pp['skin'] = v;
@@ -1806,7 +1806,7 @@ export class EditorScene extends Phaser.Scene {
   private currentSelection(): { kind: Entity['kind']; props: Record<string, unknown> } | null {
     switch (this.tool) {
       case 'player_start':
-        return { kind: 'player_start', props: this.playerSkin !== 'pink' ? { skin: this.playerSkin } : {} };
+        return { kind: 'player_start', props: this.playerSkin !== 'tux' ? { skin: this.playerSkin } : {} };
       case 'enemy': {
         const skin = ENEMIES.find((s) => s.id === this.enemySkin) ?? ENEMIES[0];
         const props: Record<string, unknown> = { skin: skin.id };

@@ -346,7 +346,7 @@ export class GameScene extends Phaser.Scene {
     const bricks = this.physics.add.staticGroup();
     const start = level.entities.find((e) => e.kind === 'player_start');
     const playerSkinId = (start?.props as { skin?: string } | undefined)?.skin;
-    this.playerSkin = skinOf(CHAR_SKINS, playerSkinId, 'pink');
+    this.playerSkin = skinOf(CHAR_SKINS, playerSkinId, 'tux');
 
     for (const e of level.entities) {
       const cx = e.x * T + T / 2;
@@ -773,9 +773,9 @@ export class GameScene extends Phaser.Scene {
     };
     for (const c of CHAR_SKINS) {
       ensure(`${c.id}-idle`, c.idle.key, c.idle.frames - 1, 10);
-      ensure(`${c.id}-run`, c.run.key, c.run.frames - 1, 12);
-      ensure(`${c.id}-jump`, c.jump.key, 0, 1, -1);
-      ensure(`${c.id}-fall`, c.fall.key, 0, 1, -1);
+      ensure(`${c.id}-run`, c.run.key, c.run.frames - 1, c.id === 'tux' ? 14 : 12);
+      ensure(`${c.id}-jump`, c.jump.key, c.jump.frames - 1, c.id === 'tux' ? 15 : 1, 0);
+      ensure(`${c.id}-fall`, c.fall.key, c.fall.frames - 1, c.id === 'tux' ? 12 : 1, c.id === 'tux' ? 0 : -1);
     }
     for (const e of ENEMIES) ensure(`foe-${e.id}`, e.tex.key, e.tex.frames - 1, 10);
     ensure('end-open', EXIT_DOOR.pressed.key, 7, 8, 0);
@@ -1219,21 +1219,38 @@ export class GameScene extends Phaser.Scene {
     );
     this.pipeCd = Math.max(0, this.pipeCd - delta);
 
-    // --- Locomoción SMB: aceleración / fricción / derrape ---
-    const vx = body.velocity.x;
+    // --- Locomoción SuperTux (player.cpp): walk/run accel, fricción x1.5, skid x2/x2.5 ---
+    let vx = body.velocity.x;
     if (dir !== 0) {
-      const sameDir = Math.sign(vx) === dir || Math.abs(vx) < 1;
-      const rate = onFloor ? (sameDir ? FEEL.accel : FEEL.skid) : FEEL.airAccel;
-      const nvx = Phaser.Math.Clamp(vx + dir * rate * delta, -maxSpeed, maxSpeed);
+      // Arranque instantáneo ST WALK_SPEED: sin esto se siente pesado al salir.
+      if (Math.abs(vx) < FEEL.walkSpeed) vx = dir * FEEL.walkSpeed;
+      const sameDir = Math.sign(vx) === dir;
+      const overWalk = Math.abs(vx) > FEEL.walkMax;
+      let rate: number;
+      if (onFloor) {
+        if (sameDir) rate = overWalk ? FEEL.runAccel : FEEL.accel;
+        else rate = Math.abs(vx) > FEEL.skidThreshold ? FEEL.skidWide : FEEL.skid;
+      } else {
+        rate = sameDir ? FEEL.airAccel : FEEL.airAccel * 2;
+      }
+      let nvx = vx + dir * rate * delta;
+      // Límite: caminando no pasa walkMax, corriendo no pasa runMax.
+      nvx = Phaser.Math.Clamp(nvx, -maxSpeed, maxSpeed);
+      // Sobregiro ST OVERSPEED_DECELERATION: baja gradual, no corte seco.
+      if (Math.abs(nvx) > maxSpeed) {
+        const back = FEEL.overspeedDecel * delta * Math.sign(nvx);
+        nvx -= back;
+      }
       this.player.setVelocityX(nvx);
     } else {
       const rate = onFloor ? FEEL.decel : FEEL.airAccel * 0.4;
-      const nvx = Math.abs(vx) <= rate * delta ? 0 : vx - Math.sign(vx) * rate * delta;
-      this.player.setVelocityX(nvx);
-    }
-    // Tope de velocidad al soltar B en carrera.
-    if (!running && Math.abs(body.velocity.x) > FEEL.walkMax && onFloor && dir !== 0) {
-      this.player.setVelocityX(Math.sign(body.velocity.x) * FEEL.walkMax);
+      // ST apply_friction: debajo de WALK_SPEED frena en seco.
+      if (onFloor && Math.abs(vx) < FEEL.walkSpeed) {
+        this.player.setVelocityX(0);
+      } else {
+        const nvx = Math.abs(vx) <= rate * delta ? 0 : vx - Math.sign(vx) * rate * delta;
+        this.player.setVelocityX(nvx);
+      }
     }
 
     if (!onFloor) {
@@ -1243,9 +1260,8 @@ export class GameScene extends Phaser.Scene {
     }
     this.buffer -= delta;
     if (this.buffer > 0 && (this.coyote > 0 || onFloor)) {
-      // Salto más alto a más velocidad (SMB).
-      const speedRatio = Math.min(1, Math.abs(body.velocity.x) / FEEL.runMax);
-      const jumpVel = FEEL.jumpVelWalk + (FEEL.jumpVelRun - FEEL.jumpVelWalk) * speedRatio;
+      // ST: salto más alto solo si corrés (supera MAX_WALK), no interpolado.
+      const jumpVel = Math.abs(body.velocity.x) > FEEL.walkMax ? FEEL.jumpVelRun : FEEL.jumpVelWalk;
       this.player.setVelocityY(-jumpVel);
       this.buffer = 0;
       this.coyote = 0;
