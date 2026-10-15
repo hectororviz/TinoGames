@@ -292,8 +292,14 @@ export class GameScene extends Phaser.Scene {
     }
     const worldW = (maxX + 3) * T;
     const worldH = (maxY + 3) * T;
+    // Margen sobre el techo: el mundo/cámara arrancan 3 tiles arriba de lo
+    // más alto (o de y=0), así siempre hay aire para saltar.
+    let minTop = 0;
+    for (const t of level.tiles) minTop = Math.min(minTop, t.y * T);
+    for (const e of level.entities) minTop = Math.min(minTop, e.y * T);
+    const topPx = minTop - 3 * T;
     this.killY = worldH + FEEL.killMargin;
-    this.physics.world.setBounds(0, 0, worldW, this.killY + 200);
+    this.physics.world.setBounds(0, topPx, worldW, this.killY + 200 - topPx);
 
     // --- Entidades ---
     // items/spikes/hazards/checkpoints: todo estático (los animados llevan
@@ -522,7 +528,6 @@ export class GameScene extends Phaser.Scene {
       // Moneda: solo puntaje.
       this.coins++;
       this.refreshHud();
-      this.showMsg('+1 🪙');
     });
     // La salida abre siempre (las monedas son puntaje).
     this.physics.add.overlap(this.player, spikes, () => this.damage());
@@ -541,7 +546,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // --- Camara + HUD ---
-    this.cameras.main.setBounds(0, 0, worldW, worldH);
+    this.cameras.main.setBounds(0, topPx, worldW, worldH - topPx);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
     this.hudGems = this.add.text(12, 8, '', { fontSize: '16px', color: '#ffffff', backgroundColor: '#141428aa', padding: { x: 6, y: 3 } }).setScrollFactor(0);
     this.hudHp = this.add.text(12, 34, '', { fontSize: '16px', color: '#ffffff', backgroundColor: '#141428aa', padding: { x: 6, y: 3 } }).setScrollFactor(0);
@@ -701,7 +706,6 @@ export class GameScene extends Phaser.Scene {
     this.player.setVelocityY(-FEEL.trampolineVel);
     this.buffer = 0;
     this.jumpCutArmed = true;
-    this.showMsg('¡Boing!');
   }
 
   private activateCheckpoint(c: Phaser.Physics.Arcade.Image): void {
@@ -721,7 +725,6 @@ export class GameScene extends Phaser.Scene {
     const p = this.snapToGround(tileX, tileY);
     this.startX = p.x;
     this.startY = p.y;
-    this.showMsg('Checkpoint');
   }
 
   private makeAnims(): void {
@@ -764,7 +767,6 @@ export class GameScene extends Phaser.Scene {
       this.exitZone.spr.setTexture(EXIT_DOOR.pressed.key, 0);
       this.exitZone.spr.play('end-open');
     }
-    this.showMsg('¡Salida abierta!');
   }
 
   /** Daño estilo Mario: grande→chico con invencibilidad, chico→muerte. */
@@ -775,7 +777,6 @@ export class GameScene extends Phaser.Scene {
       this.applyForm(false);
       this.invuln = FEEL.invulnTime;
       this.refreshHud();
-      this.showMsg('¡Achicado!');
       return;
     }
     this.respawn();
@@ -827,7 +828,6 @@ export class GameScene extends Phaser.Scene {
       const feet = body.bottom;
       if (!this.rectFree(this.player.x, feet, FEEL.bigW, FEEL.bigH, 0)) {
         this.refreshHud();
-        this.showMsg('¡Sin lugar!');
         return;
       }
       this.setCrouch(false);
@@ -835,10 +835,8 @@ export class GameScene extends Phaser.Scene {
       // Replantar pies donde estaban (colocación analítica, nunca embebido).
       this.poseAtFeet(this.player.x, feet);
       this.refreshHud();
-      this.showMsg('¡Grande!');
     } else {
       this.refreshHud();
-      this.showMsg('¡Ñam!');
     }
   }
 
@@ -854,7 +852,6 @@ export class GameScene extends Phaser.Scene {
     this.blocks = this.blocks.filter((b) => b !== block);
     this.dropSolidRect(block);
     this.spawnShroom(block.x, block.y - T);
-    this.showMsg('¡Hongo!');
   }
 
   /** Ladrillo: se cabecea desde abajo; chico rebota, grande lo rompe. */
@@ -869,7 +866,6 @@ export class GameScene extends Phaser.Scene {
       brick.disableBody(true, true);
       this.bricks = this.bricks.filter((b) => b !== brick);
       this.dropSolidRect(brick);
-      this.showMsg('¡Roto!');
       return;
     }
     // Rebote visual del ladrillo.
@@ -880,7 +876,6 @@ export class GameScene extends Phaser.Scene {
       yoyo: true,
       onUpdate: () => brick.refreshBody(),
     });
-    this.showMsg('¡Muy duro!');
   }
 
   /** Hongo móvil: sale del bloque, camina con gravedad y agranda al tocarlo. */
@@ -932,7 +927,6 @@ export class GameScene extends Phaser.Scene {
       this.player.setVelocityY(this.jumpHeld() ? -FEEL.stompHigh : -FEEL.stompLow);
       this.buffer = 0;
       this.jumpCutArmed = true;
-      this.showMsg('¡Pisotón!');
       return;
     }
     this.damage();
@@ -1048,15 +1042,9 @@ export class GameScene extends Phaser.Scene {
         : keyLeft && midY > p.top - 4 && midY < p.bottom + 4 &&
           body.left > p.right - 24 && body.left < p.right + 8;
       if (!want) continue;
-      if (!p.target) {
-        this.showMsg('Tubería tapada');
-        return;
-      }
+      if (!p.target) return;
       const dest = this.pipes.find((q) => q.pid === p.target);
-      if (!dest) {
-        this.showMsg('Tubería tapada');
-        return;
-      }
+      if (!dest) return;
       this.setCrouch(false);
       const tb = this.player.body as Phaser.Physics.Arcade.Body;
       const halfH = (tb.bottom - tb.top) / 2 + 2;
@@ -1077,7 +1065,6 @@ export class GameScene extends Phaser.Scene {
       // Pararse recién en destino (si hay techo, si no sigue agachado).
       this.setCrouch(false);
       this.pipeCd = 1.0;
-      this.showMsg('¡Warp!');
       return;
     }
   }

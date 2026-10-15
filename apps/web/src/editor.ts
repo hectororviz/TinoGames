@@ -800,17 +800,25 @@ export class EditorScene extends Phaser.Scene {
       g.lineStyle(2, 0xffffff, 0.9);
       g.strokeCircle(lx, ly, T);
     }
-    // Recorrido de plataformas móviles (eje + rango).
+    // Recorrido de plataformas móviles (eje + rango) + huella real 2×1.
     g.lineStyle(2, 0x33ddff, 0.7);
     for (const e of this.level.entities) {
       if (e.kind !== 'platform') continue;
       const pr = (e.props ?? {}) as { axis?: unknown; range?: unknown };
-      if (pr.axis === 'fall') continue;
       const cx = e.x * T + T / 2;
       const cy = e.y * T + T / 2;
+      if (pr.axis === 'fall') {
+        g.lineStyle(2, 0xffffff, 0.4);
+        g.strokeRect(cx - 32, cy - 5, 64, 10);
+        g.lineStyle(2, 0x33ddff, 0.7);
+        continue;
+      }
       const range = Math.max(0, Math.floor(typeof pr.range === 'number' ? pr.range : 3)) * T;
       if (pr.axis === 'y') g.lineBetween(cx, cy - range, cx, cy + range);
       else g.lineBetween(cx - range, cy, cx + range, cy);
+      g.lineStyle(2, 0xffffff, 0.4);
+      g.strokeRect(cx - 32, cy - 4, 64, 8);
+      g.lineStyle(2, 0x33ddff, 0.7);
     }
     // Entidad seleccionada (inspector).
     if (this.selected && this.level.entities.includes(this.selected)) {
