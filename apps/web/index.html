@@ -82,6 +82,20 @@
       #ed-flyout .opt-wrap { display: flex; flex-direction: column; gap: 2px; grid-column: span 3; }
       #ed-flyout button.opt.wide { width: 100%; height: 56px; background-size: cover; }
       #ed-flyout .opt-label { font-size: 12px; color: #fff; }
+      #ed-props { position: fixed; right: 8px; top: 56px; z-index: 20; width: 200px;
+        max-height: calc(100vh - 100px); overflow-y: auto;
+        background: #23233d; border: 1px solid #55557a; border-radius: 10px;
+        padding: 10px; color: #fff; font-family: system-ui, sans-serif; font-size: 13px; }
+      #ed-props[hidden] { display: none; }
+      #ed-props h3 { margin: 0 0 8px; font-size: 14px; }
+      #ed-props label { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px;
+        font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #aaaacc; }
+      #ed-props input, #ed-props select { min-height: 34px; font-size: 14px; color: #fff;
+        background: #1a1a2e; border: 1px solid #55557a; border-radius: 6px; padding: 4px 8px;
+        text-transform: none; letter-spacing: normal; }
+      #ed-props .row { display: flex; gap: 6px; }
+      #ed-props .row button { flex: 1; }
+      #ed-props button.danger { background: #7a2e2e; border-color: #a05050; }
       #ed-statusbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; min-height: 32px;
         display: flex; gap: 12px; align-items: center; padding: 4px 12px;
         background: #141428; color: #fff; font-family: system-ui, sans-serif; font-size: 13px; }
@@ -287,6 +301,7 @@
         <div class="ed-cur"><label>Recientes</label><div id="ed-recents"></div></div>
       </div>
       <div id="ed-flyout" hidden></div>
+      <aside id="ed-props" hidden aria-label="Propiedades del elemento"></aside>
       <div id="ed-statusbar">
         <span id="ed-status"></span>
         <span id="ed-coords"></span>

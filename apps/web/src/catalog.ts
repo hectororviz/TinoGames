@@ -177,12 +177,14 @@ export interface EnemySkin {
   bh: number;
   speed?: number;
   range?: number;
+  /** Lado al que mira el arte. Por defecto 'right'. */
+  face?: 'left' | 'right';
 }
 
 function foe(
   id: string, label: string, kind: 'walker' | 'flyer',
   key: string, url: string, fw: number, fh: number, frames: number,
-  bw: number, bh: number, extra?: { speed?: number; range?: number },
+  bw: number, bh: number, extra?: { speed?: number; range?: number; face?: 'left' | 'right' },
 ): EnemySkin {
   return { id, label, kind, tex: sheet(key, url, fw, fh, frames), bw, bh, ...extra };
 }
@@ -192,15 +194,15 @@ export const ENEMIES: EnemySkin[] = [
   foe('chicken', 'Pollo', 'walker', 'foe-chicken', enChicken, 32, 34, 14, 26, 28),
   foe('mushroom', 'Hongo', 'walker', 'foe-mushroom', enMushroom, 32, 32, 16, 26, 26),
   foe('radish', 'Rabanito', 'walker', 'foe-radish', enRadish, 30, 38, 12, 24, 32),
-  foe('rino', 'Rino', 'walker', 'foe-rino', enRino, 52, 34, 6, 44, 28),
-  foe('rock1', 'Roca 1', 'walker', 'foe-rock1', enRock1, 38, 34, 14, 32, 28),
+  foe('rino', 'Rino', 'walker', 'foe-rino', enRino, 52, 34, 6, 44, 28, { face: 'left' }),
+  foe('rock1', 'Roca 1', 'walker', 'foe-rock1', enRock1, 38, 34, 14, 32, 28, { face: 'left' }),
   foe('rock2', 'Roca 2', 'walker', 'foe-rock2', enRock2, 32, 28, 14, 26, 22),
   foe('rock3', 'Roca 3', 'walker', 'foe-rock3', enRock3, 22, 18, 14, 18, 14),
   foe('slime', 'Slime', 'walker', 'foe-slime', enSlime, 44, 30, 10, 38, 24),
-  foe('snail', 'Caracol', 'walker', 'foe-snail', enSnail, 38, 24, 10, 32, 18, { speed: 20 }),
-  foe('trunk', 'Tronco', 'walker', 'foe-trunk', enTrunk, 64, 32, 14, 56, 26),
+  foe('snail', 'Caracol', 'walker', 'foe-snail', enSnail, 38, 24, 10, 32, 18, { speed: 20, face: 'left' }),
+  foe('trunk', 'Tronco', 'walker', 'foe-trunk', enTrunk, 64, 32, 14, 56, 26, { face: 'left' }),
   foe('bunny', 'Conejo', 'walker', 'foe-bunny', enBunny, 34, 44, 12, 28, 38),
-  foe('chameleon', 'Camaleón', 'walker', 'foe-chameleon', enChameleon, 84, 38, 8, 76, 32, { speed: 25 }),
+  foe('chameleon', 'Camaleón', 'walker', 'foe-chameleon', enChameleon, 84, 38, 8, 76, 32, { speed: 25, face: 'left' }),
   foe('fatbird', 'Pájaro gordo', 'walker', 'foe-fatbird', enFatbird, 40, 48, 4, 34, 42, { speed: 25 }),
   foe('turtle', 'Tortuga', 'walker', 'foe-turtle', enTurtle, 44, 26, 14, 38, 20, { speed: 25 }),
   foe('duck', 'Pato', 'walker', 'foe-duck', enDuck, 36, 36, 10, 30, 30),

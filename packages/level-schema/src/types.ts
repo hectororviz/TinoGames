@@ -76,7 +76,7 @@ export interface GemProps {
 }
 
 export interface PlatformProps {
-  /** 'x' móvil horizontal | 'fall' se cae al pisarla. Por defecto 'x'. */
+  /** 'x' móvil horizontal | 'y' móvil vertical | 'fall' se cae al pisarla. Por defecto 'x'. */
   axis?: string;
   /** Tiles de recorrido (móvil). Por defecto 3. */
   range?: number;

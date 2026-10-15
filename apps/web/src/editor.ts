@@ -71,7 +71,8 @@ export class EditorScene extends Phaser.Scene {
   private enemySkin = 'pig';
   private fruitSkin = 'apple';
   private gemColor = 'purple';
-  private platformAxis = 'x';
+  private platformAxis: 'x' | 'y' | 'fall' = 'x';
+  private selected: Entity | null = null;
   private obstacle = 'spikes';
   private powerSkin = 'box1';
   private pipeDir = 'up';
@@ -330,6 +331,8 @@ export class EditorScene extends Phaser.Scene {
     this.level = cloneLevel(level);
     this.dirty = true;
     this.lastPaintKey = '';
+    this.selected = null;
+    this.hideProps();
     this.renderLevel();
     this.updateStatus();
   }
@@ -351,7 +354,216 @@ export class EditorScene extends Phaser.Scene {
 
   private setTool(tool: Tool | null): void {
     this.tool = tool;
+    this.selected = null;
+    this.hideProps();
     this.refreshRail();
+  }
+
+  /** Clic con la mano (sin arrastrar): selecciona la entidad para el inspector. */
+  private selectAt(x: number, y: number): void {
+    this.selected = this.entityAt(x, y);
+    this.renderProps();
+    this.renderLevel();
+  }
+
+  private hideProps(): void {
+    const panel = document.getElementById('ed-props');
+    if (panel) panel.hidden = true;
+  }
+
+  private propsOf(e: Entity): Record<string, unknown> {
+    if (!e.props || typeof e.props !== 'object') e.props = {};
+    return e.props as Record<string, unknown>;
+  }
+
+  /** Aplica un cambio de propiedad con undo. */
+  private setProp(mut: (p: Record<string, unknown>) => void): void {
+    if (!this.selected || !this.level.entities.includes(this.selected)) return;
+    this.pushHistory();
+    mut(this.propsOf(this.selected));
+    this.dirty = true;
+    this.renderLevel();
+    this.updateStatus();
+  }
+
+  private numField(
+    host: HTMLElement, label: string, value: number,
+    min: number, max: number, step: number,
+    set: (v: number) => void,
+  ): void {
+    const lab = document.createElement('label');
+    lab.textContent = label;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(step);
+    input.value = String(value);
+    input.onchange = () => {
+      const v = Number(input.value);
+      if (!Number.isFinite(v)) return;
+      set(Math.min(max, Math.max(min, v)));
+    };
+    lab.appendChild(input);
+    host.appendChild(lab);
+  }
+
+  private selectField(
+    host: HTMLElement, label: string, value: string,
+    options: { id: string; label: string }[],
+    set: (v: string) => void,
+  ): void {
+    const lab = document.createElement('label');
+    lab.textContent = label;
+    const sel = document.createElement('select');
+    for (const o of options) {
+      const opt = document.createElement('option');
+      opt.value = o.id;
+      opt.textContent = o.label;
+      sel.appendChild(opt);
+    }
+    sel.value = value;
+    sel.onchange = () => set(sel.value);
+    lab.appendChild(sel);
+    host.appendChild(lab);
+  }
+
+  private deleteSelected(): void {
+    const e = this.selected;
+    if (!e || !this.level.entities.includes(e)) return;
+    this.pushHistory();
+    if (e.kind === 'pipe') {
+      const pid = (e.props as { pid?: unknown } | undefined)?.pid;
+      if (typeof pid === 'string' && pid) this.clearLinksTo(pid);
+    }
+    this.level.entities = this.level.entities.filter((o) => o !== e);
+    if (this.linkFirst === e) this.linkFirst = null;
+    this.selected = null;
+    this.dirty = true;
+    this.hideProps();
+    this.renderLevel();
+    this.updateStatus();
+  }
+
+  /** Inspector de propiedades de la entidad seleccionada. */
+  private renderProps(): void {
+    const panel = document.getElementById('ed-props');
+    if (!panel) return;
+    const e = this.selected && this.level.entities.includes(this.selected) ? this.selected : null;
+    if (!e) {
+      this.selected = null;
+      panel.hidden = true;
+      return;
+    }
+    this.selected = e;
+    panel.hidden = false;
+    panel.textContent = '';
+    const title = document.createElement('h3');
+    title.textContent = `${e.kind} (${e.x},${e.y})`;
+    panel.appendChild(title);
+    const p = this.propsOf(e);
+    const num = (k: string, dflt: number, min: number, max: number, step = 1): void => {
+      this.numField(panel, k, typeof p[k] === 'number' ? (p[k] as number) : dflt, min, max, step, (v) => {
+        this.setProp((pp) => {
+          pp[k] = v;
+        });
+      });
+    };
+    switch (e.kind) {
+      case 'walker':
+      case 'flyer':
+        num('range', 4, 0, 20);
+        num('speed', 40, 0, 200);
+        break;
+      case 'platform':
+        this.selectField(panel, 'axis', typeof p['axis'] === 'string' ? (p['axis'] as string) : 'x', [
+          { id: 'x', label: 'Horizontal →' },
+          { id: 'y', label: 'Vertical ↕' },
+          { id: 'fall', label: 'Se cae' },
+        ], (v) => {
+          this.setProp((pp) => {
+            pp['axis'] = v;
+          });
+        });
+        num('range', 3, 0, 20);
+        num('speed', 50, 10, 200);
+        break;
+      case 'spikes': {
+        num('w', 1, 1, 12);
+        num('h', 1, 1, 12);
+        break;
+      }
+      case 'pipe': {
+        num('w', 2, 1, 8);
+        num('h', 2, 1, 8);
+        this.selectField(panel, 'dir', typeof p['dir'] === 'string' ? (p['dir'] as string) : 'up', [
+          { id: 'up', label: 'Boca ↑' },
+          { id: 'down', label: 'Boca ↓' },
+          { id: 'left', label: 'Boca ←' },
+          { id: 'right', label: 'Boca →' },
+        ], (v) => {
+          this.setProp((pp) => {
+            pp['dir'] = v;
+          });
+        });
+        const ids = document.createElement('div');
+        ids.style.cssText = 'font-size:12px;color:#aaaacc;margin-bottom:8px;';
+        ids.textContent = `${String(p['pid'] ?? '?')} → ${String(p['target'] ?? 'tapada')}`;
+        panel.appendChild(ids);
+        break;
+      }
+      case 'fruit':
+        this.selectField(panel, 'skin', typeof p['skin'] === 'string' ? (p['skin'] as string) : 'apple',
+          FRUITS.map((f) => ({ id: f.id, label: f.label })), (v) => {
+            this.setProp((pp) => {
+              pp['skin'] = v;
+            });
+          });
+        break;
+      case 'gem':
+        this.selectField(panel, 'color', typeof p['color'] === 'string' ? (p['color'] as string) : 'purple',
+          COINS.map((g) => ({ id: g.id, label: `Moneda ${g.label}` })), (v) => {
+            this.setProp((pp) => {
+              pp['color'] = v;
+            });
+          });
+        break;
+      case 'player_start':
+        this.selectField(panel, 'skin', typeof p['skin'] === 'string' ? (p['skin'] as string) : 'pink',
+          CHAR_SKINS.map((c) => ({ id: c.id, label: c.label })), (v) => {
+            this.setProp((pp) => {
+              pp['skin'] = v;
+            });
+          });
+        break;
+      case 'powerup':
+        this.selectField(panel, 'skin', typeof p['skin'] === 'string' ? (p['skin'] as string) : 'box1',
+          POWERUPS.map((d) => ({ id: d.id, label: d.label })), (v) => {
+            this.setProp((pp) => {
+              pp['skin'] = v;
+            });
+          });
+        break;
+      default:
+        break;
+    }
+    const row = document.createElement('div');
+    row.className = 'row';
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'danger';
+    del.textContent = 'Borrar';
+    del.onclick = () => this.deleteSelected();
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = 'Cerrar';
+    close.onclick = () => {
+      this.selected = null;
+      this.hideProps();
+      this.renderLevel();
+    };
+    row.append(del, close);
+    panel.appendChild(row);
   }
 
   /** Fantasma del objeto actual bajo el cursor. */
@@ -485,6 +697,18 @@ export class EditorScene extends Phaser.Scene {
     for (const entity of this.level.entities) {
       const cx = entity.x * T + T / 2;
       const cy = entity.y * T + T / 2;
+      if (entity.kind === 'platform') {
+        // Mosaico 2×32px como en juego (el recorrido se dibuja al final).
+        const pr = (entity.props ?? {}) as { axis?: unknown };
+        const fall = pr.axis === 'fall';
+        const tex = fall ? PLATFORMS.faller.key : PLATFORMS.mover.key;
+        for (const ox of [-16, 16]) {
+          const sprite = this.add.image(cx + ox, cy, tex, 0);
+          sprite.setOrigin(0.5, 0.5);
+          this.sprites.push(sprite);
+        }
+        continue;
+      }
       if (entity.kind === 'pipe') {
         // Huella w×h: boca (rim) del lado dir, cuerpo en el resto.
         const pr = (entity.props ?? {}) as { w?: unknown; h?: unknown; dir?: unknown };
@@ -576,6 +800,25 @@ export class EditorScene extends Phaser.Scene {
       g.lineStyle(2, 0xffffff, 0.9);
       g.strokeCircle(lx, ly, T);
     }
+    // Recorrido de plataformas móviles (eje + rango).
+    g.lineStyle(2, 0x33ddff, 0.7);
+    for (const e of this.level.entities) {
+      if (e.kind !== 'platform') continue;
+      const pr = (e.props ?? {}) as { axis?: unknown; range?: unknown };
+      if (pr.axis === 'fall') continue;
+      const cx = e.x * T + T / 2;
+      const cy = e.y * T + T / 2;
+      const range = Math.max(0, Math.floor(typeof pr.range === 'number' ? pr.range : 3)) * T;
+      if (pr.axis === 'y') g.lineBetween(cx, cy - range, cx, cy + range);
+      else g.lineBetween(cx - range, cy, cx + range, cy);
+    }
+    // Entidad seleccionada (inspector).
+    if (this.selected && this.level.entities.includes(this.selected)) {
+      const ex = this.selected.x * T;
+      const ey = this.selected.y * T;
+      g.lineStyle(3, 0xffffff, 0.95);
+      g.strokeRect(ex - 2, ey - 2, T + 4, T + 4);
+    }
   }
 
   private bindUi(): void {
@@ -638,6 +881,8 @@ export class EditorScene extends Phaser.Scene {
     this.level = blankLevel();
     this.dirty = false;
     this.lastPaintKey = '';
+    this.selected = null;
+    this.hideProps();
     this.centerCamera();
     this.renderBackground();
     this.renderLevel();
@@ -881,8 +1126,12 @@ export class EditorScene extends Phaser.Scene {
     this.fopt(grid, 'Checkpoint', this.sheetThumb(CHECKPOINT.off.url, 64, 64, 1), () => {
       this.tool = 'checkpoint';
     });
-    this.fopt(grid, 'Plataforma móvil', this.sheetThumb(PLATFORMS.mover.url, 32, 8, 8), () => {
+    this.fopt(grid, 'Plataforma → (horizontal)', this.sheetThumb(PLATFORMS.mover.url, 32, 8, 8), () => {
       this.platformAxis = 'x';
+      this.tool = 'platform';
+    });
+    this.fopt(grid, 'Plataforma ↕ (vertical)', this.sheetThumb(PLATFORMS.mover.url, 32, 8, 8), () => {
+      this.platformAxis = 'y';
       this.tool = 'platform';
     });
     this.fopt(grid, 'Plataforma que cae', this.sheetThumb(PLATFORMS.faller.url, 32, 10, 4), () => {
@@ -985,7 +1234,11 @@ export class EditorScene extends Phaser.Scene {
       case 'fruit': return (FRUITS.find((f) => f.id === this.fruitSkin) ?? FRUITS[0]).label;
       case 'gem': return `Moneda ${(COINS.find((g) => g.id === this.gemColor) ?? COINS[0]).label}`;
       case 'checkpoint': return 'Checkpoint';
-      case 'platform': return this.platformAxis === 'fall' ? 'Plataforma que cae' : 'Plataforma móvil';
+      case 'platform': {
+        const axis = this.platformAxis;
+        if (axis === 'fall') return 'Plataforma que cae';
+        return axis === 'y' ? 'Plataforma ↕' : 'Plataforma →';
+      }
       case 'spikes': return (OBSTACLES.find((o) => o.id === this.obstacle) ?? OBSTACLES[0]).label;
       case 'powerup': return (POWERUPS.find((d) => d.id === this.powerSkin) ?? POWERUPS[0]).label;
       case 'brick': return 'Ladrillo';
@@ -1185,6 +1438,8 @@ export class EditorScene extends Phaser.Scene {
             this.pushHistory();
             this.level = level;
             this.dirty = true;
+            this.selected = null;
+            this.hideProps();
             this.centerCamera();
             this.renderBackground();
             this.renderLevel();
@@ -1266,7 +1521,14 @@ export class EditorScene extends Phaser.Scene {
       }
     });
 
-    const stop = (): void => {
+    const stop = (pointer: Phaser.Input.Pointer): void => {
+      if (this.tool === 'hand' && pointer) {
+        const moved = Math.hypot(pointer.x - this.downX, pointer.y - this.downY);
+        if (!this.panning && moved <= DRAG_THRESHOLD && !this.erasing) {
+          const wp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+          this.selectAt(Math.floor(wp.x / T), Math.floor(wp.y / T));
+        }
+      }
       if (this.strokeSnapshot && JSON.stringify(this.strokeSnapshot) !== JSON.stringify(this.level)) {
         this.past.push(this.strokeSnapshot);
         if (this.past.length > 60) this.past.shift();
@@ -1312,7 +1574,11 @@ export class EditorScene extends Phaser.Scene {
     });
     this.input.keyboard?.on('keydown-ESC', () => {
       if (!this.flyout().hidden) this.closeFlyout();
-      else this.setTool(null);
+      else if (this.selected) {
+        this.selected = null;
+        this.hideProps();
+        this.renderLevel();
+      } else this.setTool(null);
     });
     this.input.keyboard?.on('keydown-SPACE', (e: KeyboardEvent) => {
       if (this.typing()) return;
@@ -1504,6 +1770,23 @@ export class EditorScene extends Phaser.Scene {
       const w = Math.max(1, Math.floor(typeof pr.w === 'number' ? pr.w : 2));
       const h = Math.max(1, Math.floor(typeof pr.h === 'number' ? pr.h : 2));
       if (x >= e.x && x < e.x + w && y >= e.y && y < e.y + h) return e;
+    }
+    return null;
+  }
+
+  /** Entidad bajo el tile (respeta huellas de tubería y pinchos). */
+  private entityAt(x: number, y: number): Entity | null {
+    const pipe = this.pipeAt(x, y);
+    if (pipe) return pipe;
+    for (const e of this.level.entities) {
+      if (e.kind === 'spikes') {
+        const pr = (e.props ?? {}) as { w?: unknown; h?: unknown };
+        const w = Math.max(1, Math.floor(typeof pr.w === 'number' ? pr.w : 1));
+        const h = Math.max(1, Math.floor(typeof pr.h === 'number' ? pr.h : 1));
+        if (x >= e.x && x < e.x + w && y >= e.y && y < e.y + h) return e;
+        continue;
+      }
+      if (e.x === x && e.y === y) return e;
     }
     return null;
   }

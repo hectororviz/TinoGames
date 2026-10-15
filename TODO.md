@@ -10,12 +10,10 @@ Deploy en VPS vía Actions → GHCR.
 
 ## Estructura actual
 
-- `apps/web/` — juego + editor (Vite + Phaser 3.90). Física SMB
-  (`walkMax/runMax/acel/derrape`, salto variable, pisotón, chico/grande,
-  hongo móvil, ladrillos, tuberías warp, agacharse), editor con riel en
-  cascada (pinceles hongo/moneda/bloque ?/ladrillo/tubería auto-enlazada),
-  6 biomas de fondo, 20 enemigos, monedas, checkpoints, plataformas,
-  7 obstáculos, banner AdSense.
+- `apps/web/` — juego + editor (Vite + Phaser 3.90). Física SMB, hongo móvil,
+  ladrillos, tuberías warp 4 lados (🔗 manual), agacharse, plataformas H/V
+  pixel-perfect, inspector de propiedades (mano+clic), fondo en vivo y límites
+  en editor, HUD con píldora (🪙, 🍄 solo grande).
 - `packages/level-schema/` — formato v2 (tipos + validador + ejemplo, 17 tests).
   Kinds: `player_start/fruit(hongo)/gem(moneda)/walker/flyer/spikes/checkpoint/platform/deco/powerup(bloque ?)/brick/pipe/exit(siempre abierta)`.
 - `packages/themes/` — `pixel-adventure.json` (mapeo real, sin placeholders).

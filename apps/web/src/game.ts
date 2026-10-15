@@ -38,6 +38,8 @@ interface Walker {
   speed: number;
   bw: number;
   bh: number;
+  /** El arte mira a la izquierda: el flip se invierte. */
+  faceLeft: boolean;
 }
 
 interface Flyer {
@@ -51,6 +53,8 @@ interface Flyer {
   rangePx: number;
   dir: number;
   speed: number;
+  /** El arte mira a la izquierda: el flip se invierte. */
+  faceLeft: boolean;
 }
 
 interface Floater {
@@ -73,10 +77,13 @@ interface LoopAnim {
 interface Mover {
   spr: Phaser.Physics.Arcade.Sprite;
   homeX: number;
+  homeY: number;
+  axis: 'x' | 'y';
   rangePx: number;
   dir: number;
   speed: number;
   prevX: number;
+  prevY: number;
 }
 
 /** Hongo móvil que sale de los bloques "?". Camina y agranda al tocarlo. */
@@ -371,6 +378,7 @@ export class GameScene extends Phaser.Scene {
             speed: ((props['speed'] as number | undefined) ?? skin.speed ?? FEEL.walkerSpeed),
             bw: skin.bw,
             bh: skin.bh,
+            faceLeft: skin.face === 'left',
           });
           break;
         }
@@ -397,6 +405,7 @@ export class GameScene extends Phaser.Scene {
             rangePx: ((props['range'] as number | undefined) ?? 3) * T,
             dir: 1,
             speed: ((props['speed'] as number | undefined) ?? FEEL.flyerSpeed),
+            faceLeft: skin.face === 'left',
           });
           break;
         }
@@ -433,27 +442,31 @@ export class GameScene extends Phaser.Scene {
         case 'platform': {
           const axis = (props['axis'] as string | undefined) ?? 'x';
           if (axis === 'fall') {
-            const spr = this.physics.add.sprite(cx, cy, PLATFORMS.faller.key, 0);
-            spr.setDisplaySize(64, 10);
+            const spr = this.add.tileSprite(cx, cy, 64, 10, PLATFORMS.faller.key);
+            this.physics.add.existing(spr);
             const b = spr.body as Phaser.Physics.Arcade.Body;
             b.setAllowGravity(false);
             b.setImmovable(true);
             b.setSize(64, 10);
-            this.fallers.push({ spr, homeX: cx, homeY: cy, state: 'idle', timer: 0, jitter: Math.random() * 10 });
+            this.fallers.push({ spr: spr as unknown as Phaser.Physics.Arcade.Sprite, homeX: cx, homeY: cy, state: 'idle', timer: 0, jitter: Math.random() * 10 });
           } else {
-            const spr = this.physics.add.sprite(cx, cy, PLATFORMS.mover.key, 0);
-            spr.setDisplaySize(64, 8);
+            // Mosaico 2×32px: pixel-perfect, sin estirar.
+            const spr = this.add.tileSprite(cx, cy, 64, 8, PLATFORMS.mover.key);
+            this.physics.add.existing(spr);
             const b = spr.body as Phaser.Physics.Arcade.Body;
             b.setAllowGravity(false);
             b.setImmovable(true);
             b.setSize(64, 8);
             this.movers.push({
-              spr,
+              spr: spr as unknown as Phaser.Physics.Arcade.Sprite,
               homeX: cx,
+              homeY: cy,
+              axis: axis === 'y' ? 'y' : 'x',
               rangePx: (((props['range'] as number | undefined) ?? 3) * T),
               dir: 1,
               speed: (props['speed'] as number | undefined) ?? 50,
               prevX: cx,
+              prevY: cy,
             });
           }
           break;
@@ -530,10 +543,10 @@ export class GameScene extends Phaser.Scene {
     // --- Camara + HUD ---
     this.cameras.main.setBounds(0, 0, worldW, worldH);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
-    this.hudGems = this.add.text(12, 8, '', { fontSize: '16px', color: '#223322' }).setScrollFactor(0);
-    this.hudHp = this.add.text(12, 30, '', { fontSize: '16px', color: '#223322' }).setScrollFactor(0);
+    this.hudGems = this.add.text(12, 8, '', { fontSize: '16px', color: '#ffffff', backgroundColor: '#141428aa', padding: { x: 6, y: 3 } }).setScrollFactor(0);
+    this.hudHp = this.add.text(12, 34, '', { fontSize: '16px', color: '#ffffff', backgroundColor: '#141428aa', padding: { x: 6, y: 3 } }).setScrollFactor(0);
     this.msg = this.add
-      .text(240, 40, '', { fontSize: '16px', color: '#223322', align: 'center' })
+      .text(240, 40, '', { fontSize: '16px', color: '#ffffff', backgroundColor: '#141428aa', padding: { x: 6, y: 3 }, align: 'center' })
       .setOrigin(0.5, 0)
       .setScrollFactor(0);
     this.refreshHud();
@@ -736,7 +749,8 @@ export class GameScene extends Phaser.Scene {
 
   private refreshHud(): void {
     this.hudGems.setText(`🪙 ${this.coins}`);
-    this.hudHp.setText(this.big ? '● Grande' : '● Chico');
+    // Solo icono cuando hay powerup; chico no muestra nada.
+    this.hudHp.setText(this.big ? '🍄' : '');
   }
 
   private showMsg(text: string): void {
@@ -1207,7 +1221,7 @@ export class GameScene extends Phaser.Scene {
           w.dir *= -1;
         }
       }
-      w.spr.setFlipX(w.dir < 0);
+      w.spr.setFlipX(w.faceLeft ? w.dir > 0 : w.dir < 0);
     }
 
     // Hongos móviles: caminan con gravedad, giran en pared/borde, mueren abajo.
@@ -1247,23 +1261,37 @@ export class GameScene extends Phaser.Scene {
           f.dir = 1;
         }
         f.spr.y = f.baseY + Math.sin(f.t * Math.PI * 2) * 3;
-        f.spr.setFlipX(f.dir < 0);
+        f.spr.setFlipX(f.faceLeft ? f.dir > 0 : f.dir < 0);
       }
     }
 
     // Plataformas móviles: cinemáticas (posición, no velocidad) + arrastre exacto.
     for (const m of this.movers) {
-      m.spr.x += m.dir * m.speed * delta;
-      if (m.spr.x - m.homeX > m.rangePx) {
-        m.spr.x = m.homeX + m.rangePx;
-        m.dir = -1;
-      } else if (m.spr.x - m.homeX < -m.rangePx) {
-        m.spr.x = m.homeX - m.rangePx;
-        m.dir = 1;
+      if (m.axis === 'y') {
+        m.spr.y += m.dir * m.speed * delta;
+        if (m.spr.y - m.homeY > m.rangePx) {
+          m.spr.y = m.homeY + m.rangePx;
+          m.dir = -1;
+        } else if (m.spr.y - m.homeY < -m.rangePx) {
+          m.spr.y = m.homeY - m.rangePx;
+          m.dir = 1;
+        }
+        const dy = m.spr.y - m.prevY;
+        m.prevY = m.spr.y;
+        if (dy !== 0 && this.standingOn(m.spr)) this.player.y += dy;
+      } else {
+        m.spr.x += m.dir * m.speed * delta;
+        if (m.spr.x - m.homeX > m.rangePx) {
+          m.spr.x = m.homeX + m.rangePx;
+          m.dir = -1;
+        } else if (m.spr.x - m.homeX < -m.rangePx) {
+          m.spr.x = m.homeX - m.rangePx;
+          m.dir = 1;
+        }
+        const dx = m.spr.x - m.prevX;
+        m.prevX = m.spr.x;
+        if (dx !== 0 && this.standingOn(m.spr)) this.player.x += dx;
       }
-      const dx = m.spr.x - m.prevX;
-      m.prevX = m.spr.x;
-      if (dx !== 0 && this.standingOn(m.spr)) this.player.x += dx;
     }
 
     // Plataformas que caen: tiemblan poco, caen a velocidad topeada y vuelven.
