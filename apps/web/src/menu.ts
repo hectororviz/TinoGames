@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { deleteRemoteLevel, getByPin, getRemote, getToken, listMine, login, logout, me, register } from './api.js';
 import { BG_BLUE } from './catalog.js';
+import { openSettingsModal } from './settings.js';
 
 let pendingCreate = false;
 
@@ -59,6 +60,9 @@ export class MenuScene extends Phaser.Scene {
     document.getElementById('home-create')!.onclick = () => this.createLevel();
     document.getElementById('home-search')!.onclick = () => this.openSearch();
     document.getElementById('home-mine')!.onclick = () => this.openMine();
+    document.getElementById('home-settings')!.onclick = () => openSettingsModal();
+    // Sin inline viejo del juego (modo táctil "siempre").
+    document.getElementById('touch')!.style.display = '';
     this.renderHome();
   }
 

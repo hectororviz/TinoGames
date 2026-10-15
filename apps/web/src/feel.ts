@@ -36,8 +36,9 @@ export const FEEL = {
   gravityUp: 500,
   /** Gravedad con apex temprano al soltar. ST JUMP_EARLY_APEX_FACTOR x3. */
   gravityDown: 1500,
-  /** Corte de salto al soltar: vy se recorta a este tope. */
-  jumpCut: 90,
+  /** Corte de salto al soltar: 160 deja toques rápidos útiles (~2.5 tiles).
+   * Mantener da el completo (~4.2). */
+  jumpCut: 160,
   coyoteTime: 0.1,
   /** ST JUMP_GRACE_TIME 0.25 (antes 0.12). */
   jumpBuffer: 0.25,

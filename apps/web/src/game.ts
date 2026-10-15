@@ -4,6 +4,7 @@ import type { Level } from '@tinogames/level-schema';
 import sampleLevel from '@tinogames/level-schema/levels/sample-level-1.json';
 import { FEEL } from './feel.js';
 import { bindTouch, touchState } from './input.js';
+import { loadSettings, openSettingsModal, updateTouchVisibility, type Action } from './settings.js';
 import {
   BG_BLUE,
   BIOMES,
@@ -148,10 +149,19 @@ function skinOf<T extends { id: string }>(list: T[], id: string | undefined, fal
 export class GameScene extends Phaser.Scene {
   private player!: Phaser.Physics.Arcade.Sprite;
   private playerSkin: CharSkin = CHAR_SKINS[0];
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private keyR!: Phaser.Input.Keyboard.Key;
-  private keyRunA!: Phaser.Input.Keyboard.Key;
-  private keyRunB!: Phaser.Input.Keyboard.Key;
+  /** Códigos de tecla por acción (settings + fijas ↑/J/P). */
+  private actionCodes: Record<Action, string[]> = {
+    left: [], right: [], down: [], jump: [], run: [], pause: [], restart: [],
+  };
+  private heldKeys = new Set<string>();
+  private pressedKeys = new Set<string>();
+  private framePressed = new Set<string>();
+  private keyE!: Phaser.Input.Keyboard.Key;
+  /** Pausa: congela física, tweens, anims y timer. */
+  private paused = false;
+  /** Tiempo de nivel (se congela en pausa y al ganar). */
+  private elapsed = 0;
+  private finalTime = 0;
   /** false = chico (1 tile), true = grande (casi 2 tiles). */
   private big = false;
   private jumpCutArmed = false;
@@ -192,7 +202,7 @@ export class GameScene extends Phaser.Scene {
   private pipeCd = 0;
   private exitZone: { spr: Phaser.GameObjects.Sprite; open: boolean; x: number; y: number } | null = null;
   private hudGems!: Phaser.GameObjects.Text;
-  private hudHp!: Phaser.GameObjects.Text;
+  private hudTime!: Phaser.GameObjects.Text;
   private msg!: Phaser.GameObjects.Text;
   private msgTimer = 0;
 
@@ -257,7 +267,6 @@ export class GameScene extends Phaser.Scene {
   private fromEditor = false;
   private remoteId: string | undefined;
   private levelName = '';
-  private keyE!: Phaser.Input.Keyboard.Key;
 
   create(data?: { level?: Level; fromEditor?: boolean; remoteId?: string; name?: string }): void {
     document.body.classList.add('playing');
@@ -600,29 +609,85 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, topPx, worldW, worldH - topPx);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
     this.hudGems = this.add.text(12, 8, '', { fontSize: '16px', color: '#ffffff', backgroundColor: '#141428aa', padding: { x: 6, y: 3 } }).setScrollFactor(0);
-    this.hudHp = this.add.text(12, 34, '', { fontSize: '16px', color: '#ffffff', backgroundColor: '#141428aa', padding: { x: 6, y: 3 } }).setScrollFactor(0);
+    this.hudTime = this.add.text(12, 34, '0:00', { fontSize: '16px', color: '#ffffff', backgroundColor: '#141428aa', padding: { x: 6, y: 3 } }).setScrollFactor(0);
     this.msg = this.add
       .text(240, 40, '', { fontSize: '16px', color: '#ffffff', backgroundColor: '#141428aa', padding: { x: 6, y: 3 }, align: 'center' })
       .setOrigin(0.5, 0)
-      .setScrollFactor(0);
+      .setScrollFactor(0)
+      .setVisible(false);
     this.refreshHud();
 
     // La salida abre siempre (las monedas son puntaje). Después del HUD.
     this.openExit();
 
-    // --- Input ---
-    this.cursors = this.input.keyboard!.createCursorKeys();
-    this.keyR = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+    // --- Input (remapeable por settings; ↑/J/P siempre como segundas) ---
     this.keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-    this.keyRunA = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
-    this.keyRunB = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.J);
-    this.input.keyboard!.addCapture(['SPACE', 'UP']);
+    this.bindKeys();
+    window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keyup', this.onKeyUp);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.removeEventListener('keydown', this.onKeyDown);
+      window.removeEventListener('keyup', this.onKeyUp);
+      this.hideOverlay();
+    });
     bindTouch(
       () => {
         this.buffer = FEEL.jumpBuffer;
       },
       () => this.releaseJump(),
     );
+    // --- Pausa / timer / overlay ---
+    this.paused = false;
+    this.elapsed = 0;
+    this.finalTime = 0;
+    this.heldKeys.clear();
+    this.pressedKeys.clear();
+    this.anims.resumeAll();
+    this.hideOverlay();
+    updateTouchVisibility();
+    const pauseBtn = document.getElementById('game-pause');
+    if (pauseBtn) pauseBtn.onclick = () => this.setPaused(true);
+  }
+
+  /** Lee el mapeo de teclas (vivo si se cambia desde la pausa). */
+  private bindKeys(): void {
+    const k = loadSettings().keys;
+    this.actionCodes = {
+      left: [k.left],
+      right: [k.right],
+      down: [k.down],
+      jump: k.jump === 'ArrowUp' ? [k.jump] : [k.jump, 'ArrowUp'],
+      run: k.run === 'KeyJ' ? [k.run] : [k.run, 'KeyJ'],
+      pause: [k.pause, 'Escape', 'KeyP'],
+      restart: [k.restart],
+    };
+  }
+
+  private allCodes(): Set<string> {
+    const out = new Set<string>();
+    for (const codes of Object.values(this.actionCodes)) for (const c of codes) out.add(c);
+    return out;
+  }
+
+  private onKeyDown = (e: KeyboardEvent): void => {
+    const t = e.target as HTMLElement | null;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+    if (!this.allCodes().has(e.code)) return;
+    e.preventDefault();
+    this.heldKeys.add(e.code);
+    if (!e.repeat) this.pressedKeys.add(e.code);
+  };
+
+  private onKeyUp = (e: KeyboardEvent): void => {
+    this.heldKeys.delete(e.code);
+  };
+
+  private held(a: Action): boolean {
+    return this.actionCodes[a].some((c) => this.heldKeys.has(c));
+  }
+
+  private hit(a: Action): boolean {
+    return this.actionCodes[a].some((c) => this.framePressed.has(c));
   }
 
   /** Fondo por bioma: capas fijas + parallax según scroll de cámara. */
@@ -809,12 +874,11 @@ export class GameScene extends Phaser.Scene {
 
   private refreshHud(): void {
     this.hudGems.setText(`🪙 ${this.coins}`);
-    // Solo icono cuando hay powerup; chico no muestra nada.
-    this.hudHp.setText(this.big ? '🍄' : '');
   }
 
   private showMsg(text: string): void {
     this.msg.setText(text);
+    this.msg.setVisible(true);
     this.msgTimer = 2.5;
   }
 
@@ -1004,9 +1068,9 @@ export class GameScene extends Phaser.Scene {
     this.damage();
   }
 
-  /** Botón de salto mantenido (teclado o táctil): salto variable + pisotón alto. */
+  /** Botón de salto mantenido (teclado remapeable o táctil). */
   private jumpHeld(): boolean {
-    return this.cursors.space.isDown || this.cursors.up.isDown || touchState.jump;
+    return this.held('jump') || touchState.jump;
   }
 
   /** Corte de salto al soltar (llamado por el botón táctil; en teclado lo detecta el update). */
@@ -1236,28 +1300,41 @@ export class GameScene extends Phaser.Scene {
   }
 
   override update(_time: number, deltaMs: number): void {
+    // Teclas presionadas este frame (se consumen acá haya o no pausa).
+    this.framePressed = this.pressedKeys;
+    this.pressedKeys = new Set();
     const delta = Math.min(deltaMs / 1000, 0.05);
-    if (Phaser.Input.Keyboard.JustDown(this.keyR)) {
-      this.scene.restart({ level: this.currentLevel, fromEditor: this.fromEditor, remoteId: this.remoteId, name: this.levelName });
+    if (this.hit('restart')) {
+      this.restartLevel();
       return;
     }
+    if (this.hit('pause') && !this.won) {
+      this.setPaused(!this.paused);
+      return;
+    }
+    if (this.paused) return;
     if (this.fromEditor && Phaser.Input.Keyboard.JustDown(this.keyE)) {
       this.scene.start('editor', { remoteId: this.remoteId, draft: this.currentLevel, name: this.levelName });
       return;
+    }
+    // Timer de nivel (congelado en pausa y al ganar).
+    if (!this.won) {
+      this.elapsed += delta;
+      this.hudTime.setText(fmtTime(this.elapsed));
     }
 
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const onFloor = body.blocked.down || body.touching.down;
 
-    const left = this.cursors.left.isDown || touchState.left;
-    const right = this.cursors.right.isDown || touchState.right;
-    const down = this.cursors.down.isDown || touchState.down;
+    const left = this.held('left') || touchState.left;
+    const right = this.held('right') || touchState.right;
+    const down = this.held('down') || touchState.down;
     const dir = this.crouching ? 0 : (right ? 1 : 0) - (left ? 1 : 0);
     if (dir !== 0) this.facing = dir;
-    const running = this.keyRunA.isDown || this.keyRunB.isDown || touchState.run;
+    const running = this.held('run') || touchState.run;
     const maxSpeed = running ? FEEL.runMax : FEEL.walkMax;
 
-    if (Phaser.Input.Keyboard.JustDown(this.cursors.space) || Phaser.Input.Keyboard.JustDown(this.cursors.up)) {
+    if (this.hit('jump')) {
       this.buffer = FEEL.jumpBuffer;
     }
 
@@ -1267,7 +1344,7 @@ export class GameScene extends Phaser.Scene {
     else if (onFloor) this.setCrouch(false);
     // Tubería: tecla hacia la boca.
     this.tryPipe(
-      this.cursors.up.isDown || touchState.jump,
+      this.held('jump') || touchState.jump,
       down,
       left,
       right,
@@ -1563,15 +1640,17 @@ export class GameScene extends Phaser.Scene {
       const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.exitZone.x, this.exitZone.y);
       if (d < 30) {
         this.won = true;
-        this.showMsg(
-          this.fromEditor ? '¡Nivel completo! R rejugar · E editor' : '¡Nivel completo! R para rejugar',
-        );
+        this.finalTime = this.elapsed;
+        this.showWinOverlay();
       }
     }
 
     if (this.msgTimer > 0) {
       this.msgTimer -= delta;
-      if (this.msgTimer <= 0) this.msg.setText('');
+      if (this.msgTimer <= 0) {
+        this.msg.setText('');
+        this.msg.setVisible(false);
+      }
     }
 
     // Anims del jugador.
@@ -1585,4 +1664,92 @@ export class GameScene extends Phaser.Scene {
       this.player.play(`${sk}-idle`, true);
     }
   }
+
+  private restartLevel(): void {
+    this.scene.restart({ level: this.currentLevel, fromEditor: this.fromEditor, remoteId: this.remoteId, name: this.levelName });
+  }
+
+  /** Pausa: congela física, tweens, anims y timer (el timer ni siquiera avanza). */
+  private setPaused(on: boolean): void {
+    if (on === this.paused || this.won) return;
+    this.paused = on;
+    if (on) {
+      this.physics.world.pause();
+      this.tweens.pauseAll();
+      this.anims.pauseAll();
+      this.showPauseOverlay();
+    } else {
+      this.hideOverlay();
+      this.physics.world.resume();
+      this.tweens.resumeAll();
+      this.anims.resumeAll();
+    }
+  }
+
+  private showOverlay(title: string, stats: string, buttons: { label: string; primary?: boolean; run: () => void }[]): void {
+    const root = document.getElementById('game-overlay')!;
+    document.getElementById('game-overlay-title')!.textContent = title;
+    document.getElementById('game-overlay-stats')!.textContent = stats;
+    const box = document.getElementById('game-overlay-btns')!;
+    box.textContent = '';
+    for (const b of buttons) {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.textContent = b.label;
+      if (b.primary) el.className = 'primary';
+      el.onclick = () => {
+        (document.activeElement as HTMLElement | null)?.blur?.();
+        b.run();
+      };
+      box.appendChild(el);
+    }
+    root.hidden = false;
+  }
+
+  private hideOverlay(): void {
+    document.getElementById('game-overlay')!.hidden = true;
+  }
+
+  private statsLine(time: number): string {
+    return `⏱ ${fmtTime(time)} · 🪙 ${this.coins}`;
+  }
+
+  private showPauseOverlay(): void {
+    const buttons: { label: string; primary?: boolean; run: () => void }[] = [
+      { label: 'Continuar', primary: true, run: () => this.setPaused(false) },
+      { label: 'Configuración', run: () => openSettingsModal(() => this.bindKeys()) },
+      { label: 'Reiniciar', run: () => this.restartLevel() },
+    ];
+    if (this.fromEditor) {
+      buttons.push({
+        label: '← Editor', run: () => {
+          this.scene.start('editor', { remoteId: this.remoteId, draft: this.currentLevel, name: this.levelName });
+        },
+      });
+    }
+    buttons.push({ label: 'Menú', run: () => this.scene.start('menu') });
+    this.showOverlay('Pausa', this.statsLine(this.elapsed), buttons);
+  }
+
+  private showWinOverlay(): void {
+    const buttons: { label: string; primary?: boolean; run: () => void }[] = [
+      { label: 'Rejugar', primary: true, run: () => this.restartLevel() },
+    ];
+    if (this.fromEditor) {
+      buttons.push({
+        label: '← Editor', run: () => {
+          this.scene.start('editor', { remoteId: this.remoteId, draft: this.currentLevel, name: this.levelName });
+        },
+      });
+    }
+    buttons.push({ label: 'Menú', run: () => this.scene.start('menu') });
+    this.showOverlay('¡Nivel completo!', this.statsLine(this.finalTime), buttons);
+  }
+}
+
+/** Reloj de nivel m:ss. */
+function fmtTime(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
 }

@@ -109,6 +109,7 @@ export class EditorScene extends Phaser.Scene {
   create(data?: EditorData): void {
     document.body.classList.add('editing');
     document.body.classList.remove('playing');
+    document.getElementById('touch')!.style.display = '';
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       document.body.classList.remove('editing');
     });

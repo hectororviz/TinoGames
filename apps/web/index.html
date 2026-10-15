@@ -131,6 +131,26 @@
         font-size: 14px; font-family: system-ui, sans-serif; color: #fff; background: #33334d;
         border: 1px solid #55557a; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
       body.playing #game-back { display: block; }
+      #game-pause { display: none; position: fixed; top: 10px; right: 118px; z-index: 10;
+        font-size: 14px; font-family: system-ui, sans-serif; color: #fff; background: #33334d;
+        border: 1px solid #55557a; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+      body.playing #game-pause { display: block; }
+      #game-overlay[hidden] { display: none; }
+      #game-overlay { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,0.6); }
+      #game-overlay-box { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        width: min(360px, 92vw); background: #1a1a2e; color: #fff;
+        font-family: system-ui, sans-serif; font-size: 14px;
+        border: 1px solid #55557a; border-radius: 12px; padding: 20px 16px 16px;
+        display: flex; flex-direction: column; gap: 10px; text-align: center; }
+      #game-overlay-box h2 { margin: 0; font-size: 20px; }
+      #game-overlay-stats { color: #aaaacc; font-size: 15px; }
+      #game-overlay-btns { display: flex; flex-direction: column; gap: 8px; }
+      #game-overlay-btns button { min-height: 44px; font-size: 15px; font-weight: 600;
+        border-radius: 8px; border: 1px solid #55557a; background: #33334d;
+        color: #fff; cursor: pointer; }
+      #game-overlay-btns button.primary { background: #4a9eff; border-color: #4a9eff; }
+      #modal-content input[type="checkbox"] { width: auto; min-height: 24px; }
+      #modal-content input[type="range"] { flex: 1; min-height: 24px; padding: 0; }
       #menu-ui { display: none; }
       body.menu #stage { width: min(1100px, 100vw); }
       body.menu #game-frame { position: relative; width: 100%; }
@@ -239,6 +259,9 @@
           <button type="button" id="home-mine" class="rbtn" hidden>
             <span class="ico">📁</span><span class="lbl">Mis niveles</span>
           </button>
+          <button type="button" id="home-settings" class="rbtn">
+            <span class="ico">⚙</span><span class="lbl">Ajustes</span>
+          </button>
         </div>
       </div>
       <div id="game-frame">
@@ -311,6 +334,14 @@
       </div>
     </nav>
     <button type="button" id="game-back">← Editor</button>
+    <button type="button" id="game-pause" aria-label="Pausa">⏸</button>
+    <div id="game-overlay" hidden>
+      <div id="game-overlay-box" role="dialog" aria-modal="true">
+        <h2 id="game-overlay-title"></h2>
+        <div id="game-overlay-stats"></div>
+        <div id="game-overlay-btns"></div>
+      </div>
+    </div>
     <div id="modal-root" hidden>
       <div id="modal-backdrop"></div>
       <div id="modal-box" role="dialog" aria-modal="true">
