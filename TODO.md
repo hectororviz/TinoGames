@@ -14,8 +14,8 @@ Deploy en VPS vía Actions → GHCR.
   ladrillos, tuberías warp 4 lados (🔗 manual), agacharse, plataformas H/V
   pixel-perfect, inspector de propiedades (mano+clic), fondo en vivo y límites
   en editor, HUD con píldora (🪙, 🍄 solo grande).
-- `packages/level-schema/` — formato v2 (tipos + validador + ejemplo, 17 tests).
-  Kinds: `player_start/fruit(hongo)/gem(moneda)/walker/flyer/spikes/checkpoint/platform/deco/powerup(bloque ?)/brick/pipe/exit(siempre abierta)`.
+- `packages/level-schema/` — formato v2 (tipos + validador + ejemplo, 19 tests).
+  Kinds: `player_start/fruit(hongo)/gem(moneda)/walker/flyer/spikes/checkpoint/platform(x/y/fall)/deco/powerup(bloque ?)/brick/pipe/exit(siempre abierta)`.
 - `packages/themes/` — `pixel-adventure.json` (mapeo real, sin placeholders).
 - `server/` — Fastify + pg, migraciones `001/002`, auth email+password
   (scrypt + JWT HS256, sin deps extra), CRUD dueño + PIN público + CORS.
@@ -28,7 +28,7 @@ Deploy en VPS vía Actions → GHCR.
 ```bash
 pnpm install
 pnpm dev:web            # http://localhost:5173 (VITE_API_URL=http://localhost:8080 para la API)
-pnpm --filter @tinogames/level-schema test   # 16/16
+pnpm --filter @tinogames/level-schema test   # 19/19
 pnpm typecheck && pnpm build
 docker compose up db -d
 DATABASE_URL=... JWT_SECRET=... pnpm dev:server
@@ -46,16 +46,22 @@ producción: sin él la API usa secreto de desarrollo).
    publicados con PIN por nosotros.
 2. **AdSense**: cuenta en revisión (2-4 semanas). Sitio verificado (script +
    `ads.txt` en raíz y subdominio) + `/privacidad.html` en el landing.
-3. **Sonido mínimo** (WebAudio, sin assets): salto, pisotón, powerup, daño, checkpoint.
-4. **Túnel 1-tile**: verificado por diseño (chico 12×14 pasa, grande 14×28 no).
+3. **Sonido mínimo** (WebAudio, sin assets): salto, pisotón, hongo, moneda,
+   daño, warp, victoria. (Los toasts se eliminaron; el sonido es el feedback.)
+4. **Túnel 1-tile**: verificado por diseño (chico 12×14 pasa, grande 14×28 no;
+   agachado-grande también pasa).
 5. **PWA instalable**: service worker + iconos (hoy solo manifest).
 6. **Mobile**: probar dock del editor y táctil en pantallas chicas; aviso
-   horizontal ya existe. Táctil: A salta (variable), B corre mantenido.
-7. **Deuda menor**: chunk Phaser 1.2MB, `spikes` con `t:'spikes'` en tiles sin uso.
-8. **Sub-mundos por tubería**: `target` cruzado `"L2:P1"` (hoy `"P2"` local,
+   horizontal ya existe. Táctil: ◀▶ ▼, A salta (variable), B corre mantenido.
+7. **HUD sin emoji**: 🪙/🍄 son tofu sin fuente emoji → iconos sprite o texto.
+8. **Descubrir niveles**: lista pública / aleatorio / últimos (hoy solo PIN).
+9. **Ayuda de controles**: overlay primera vez (teclado + táctil).
+10. **Deuda menor**: chunk Phaser 1.2MB, `spikes` con `t:'spikes'` en tiles sin uso.
+11. **Sub-mundos por tubería**: `target` cruzado `"L2:P1"` (hoy `"P2"` local,
    compatible), `Level.subworlds?: {id, tiles, entities}[]` aditivo sin migrar,
    pila de retorno en `game.ts` (restart con sub-nivel), pestañas Mundo 1/2
    en el editor al final.
+12. **Caparazón koopa**: pisotón→quieto→patada en cadena.
 
 ## Decisiones ya tomadas (no reabrir sin motivo)
 

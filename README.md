@@ -1,7 +1,8 @@
 # TinoGames
 
-Plataformas 2D con editor de niveles web. Phaser + TypeScript, web-first.
-El juego, el editor y las cuentas viven en el mismo monorepo.
+Plataformas estilo SMB con editor de niveles web tipo Mario Maker.
+Phaser + TypeScript, web-first, sprites propios. El juego, el editor y las
+cuentas viven en el mismo monorepo.
 
 ## Estructura
 
@@ -15,7 +16,9 @@ El juego, el editor y las cuentas viven en el mismo monorepo.
 ## Empezar (desarrollo local)
 
 1. `pnpm install`
-2. Web: `pnpm dev:web` → http://localhost:5173 (flechas/A-D moverse, Shift/J correr, Espacio salto variable, R reinicia).
+2. Web: `pnpm dev:web` → http://localhost:5173 (flechas moverse, Shift/J
+   correr, Espacio salto variable, ↓ agacharse/entrar a tuberías, R reinicia,
+   E vuelve al editor. Táctil: ◀▶ ▼, A salta, B corre).
 3. API local:
    - `docker compose up db -d` (solo Postgres en :5432)
    - `pnpm dev:server` (requiere `DATABASE_URL` y `JWT_SECRET` en el entorno)

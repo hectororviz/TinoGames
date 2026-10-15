@@ -1,6 +1,6 @@
 # Decisiones TinoGames
 
-## Stack (2026-10-13)
+## Stack (2026-10-15)
 
 - Juego web-first → **Phaser + TypeScript + Vite** (Godot descartado: payload
   wasm pesado, editor fuera del DOM, dos mundos GDScript/JS).
@@ -9,30 +9,71 @@
 - Server: **Fastify + Postgres**, Docker, dominios vía **caddy-docker-proxy**
   (labels por env, dominios al desplegar).
 - Nivel como dato puro: JSON v2 versionado y disperso; el tema resuelve sprites.
+- Sprites 100% propios/CC0 (nada de Nintendo, ni siquiera "parecidos").
 
-## Portado del prototipo Godot
+## Mecánicas SMB con sprites propios (no reabrir)
 
-- Feel (`apps/web/src/feel.ts`, estilo SMB con sprites propios): walk 95,
-  run 165 (B/Shift/J), acel 380, derrape 700, salto variable 300→360
-  (gravedad 650/1150 + corte 110), coyote 0.10s, buffer 0.12s,
-  pisotón 210/340, chico 12×14 (1 tile) ↔ grande 12×28 vía fruta/bloque ?.
-  Sin doble-salto, sin dash, sin disparo, sin corazones.
+- Física (`apps/web/src/feel.ts`): walk 95, run 165 (B = Shift/J/táctil),
+  acel 380, derrape 700, salto variable 300→360 (gravedad 650/1150 + corte
+  110), coyote 0.10s, buffer 0.12s, pisotón 210 (suelto) / 340 (manteniendo).
+- Chico 12×14 (1 tile) ↔ grande 12×28 vía fruta fija o hongo móvil del
+  bloque `?` (hay que atraparlo). Grande→chico con 2s invuln, chico→muerte.
+  Sin doble-salto, sin dash, sin disparo, sin corazones, sin knockback.
+- Monedas (ex-gemas, 3 colores): solo puntaje. La salida abre siempre.
+- Ladrillos: chico rebota, grande rompe. Agacharse con ↓ (techo libre para
+  pararse; en aire se espera a aterrizar). Sin crecer sin techo ("¡Sin lugar!"
+  fue toast, hoy silencioso: no crece).
+- Tuberías warp 2×2 con boca en 4 lados (tecla hacia la boca); destino
+  verificado libre o se cancela el viaje. Salida con empujón hacia afuera.
+- Sin toasts de gameplay: solo mensaje de victoria. Estado en HUD
+  (🪙 contador, 🍄 solo si grande).
+- Checkpoint: último tocado. Plataformas: móviles H/V (arrastre exacto) +
+  las que caen. Mundo y cámara con 3 tiles de aire sobre lo más alto
+  (sin techo invisible en y=0).
+
+## Editor web (no reabrir)
+
+- Riel en cascada + pinceles: piso (252 variantes), personaje, enemigos (20,
+  con lado de vista por skin), hongo, moneda, obstáculos, fondo en vivo,
+  otros (checkpoint, plataformas H/V/cae, bloque `?`, ladrillo, tuberías
+  4 dirs, salida). Borrar, mano, enlazar 🔗.
+- Tuberías auto-enlazadas al pintar (P1↔P2...); enlazador manual para elegir
+  pares; borrar rompe el enlace; `target` a pid inexistente = error.
+- Inspector (mano + clic): eje/rango/velocidad de plataformas, rango/velocidad
+  de enemigos, w/h de pinchos y tuberías, dir de boca, skins y colores.
+- Canvas: fondo del bioma en vivo + velo, grilla, guía de vista 480×270,
+  caja del nivel, techo y=0, línea de muerte, recorridos de plataformas,
+  huellas reales, etiquetas de tubería y selección.
+- Undo/redo (60), atajos (1-9, E, H, F, Ctrl+Z/Y, Espacio pan), Probar↔Editor
+  (E), importar/exportar JSON, cámara con correa.
+
+## Técnica de juego (lecciones pagadas)
+
+- Rects sólidos únicos (`solidRects`: tiles + tuberías + bloques): los usan
+  pararse, crecer, respawn y salidas warp. Lo roto sale de la lista.
+- Regla fantasma de Arcade (`overlap > maxOverlap` se ignora): nunca dejar
+  un cuerpo embebido >1px. Colocación analítica + 1px de aire + `body.reset()`
+  (replantar solo el sprite deja `prev` obsoleto y el postUpdate catapulta).
+- Red `ejectUp`: si el cuerpo solapa, salir hacia arriba. Solo pararse en
+  piso y con lugar; en aire se espera.
+- `tileSprite` sobre spritesheet muestra frames pegados: plataformas usan
+  texturas 64px de frame único generadas por canvas.
 - Arte (`assets/`, Pixel Adventure 1+2 CC0 + Sunny Land bosque CC0 + generado
-  propio): 4 personajes, 8 frutas, 3 gemas, 20 enemigos, 7 obstáculos,
-  checkpoints, salida End, plataformas, 252 variantes de piso, 6 biomas.
-  Créditos en `assets/CREDITS_PIXELADVENTURE.md`.
-- Lecciones que siguen valiendo: vertical slice primero, feel antes que
-  contenido, items con propósito (llave de salida), commits por hito jugable.
+  propio con `gen_art.py`): 4 personajes, 8 frutas-hongo, 3 monedas, 20
+  enemigos, 7 obstáculos, checkpoints, salida End, plataformas, tuberías,
+  252 variantes de piso, 6 biomas. Créditos en
+  `assets/CREDITS_PIXELADVENTURE.md`.
 
-## Hecho desde entonces (no reabrir)
+## Hecho desde el portado Godot (no reabrir)
 
-- Editor web completo (riel en cascada, undo/redo, atajos, Probar↔Editor).
-- Auth real (scrypt + JWT, sin header temporal) y niveles por dueño + PIN.
+- Auth real (scrypt + JWT) y niveles por dueño + PIN `XXXX-XXXX`.
 - Niveles solo en servidor; jugar por PIN público y sin login.
 - Trampas animadas como estáticos (los dinámicos en grupo caían).
-- Respawn con snap a piso; walkers giran en bordes; plataformas cinemáticas.
+- Walkers giran en bordes; plataformas cinemáticas con arrastre.
 - AdSense integrado (slot + `ads.txt` + privacidad en el landing).
 
 ## Pendiente explícito
 
-- Service worker PWA, sonido WebAudio, niveles oficiales.
+- Sonido WebAudio, HUD sin emoji (iconos sprite), niveles oficiales,
+  descubrir niveles (lista pública/aleatorio), ayuda de controles,
+  service worker PWA, caparazón koopa, sub-mundos por tubería.
