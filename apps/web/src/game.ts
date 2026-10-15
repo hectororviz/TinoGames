@@ -484,8 +484,9 @@ export class GameScene extends Phaser.Scene {
     }
     this.physics.add.collider(this.player, items, (_p, obj) => {
       const go = obj as Phaser.GameObjects.GameObject;
+      const isFruit = go.getData?.('fruit') === true;
       go.destroy();
-      if (go.getData?.('fruit') === true) {
+      if (isFruit) {
         this.grow();
         return;
       }
@@ -527,6 +528,7 @@ export class GameScene extends Phaser.Scene {
     // --- Input ---
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keyR = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+    this.keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
     this.keyRunA = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
     this.keyRunB = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.J);
     this.input.keyboard!.addCapture(['SPACE', 'UP']);
