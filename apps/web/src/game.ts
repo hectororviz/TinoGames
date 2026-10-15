@@ -7,16 +7,17 @@ import { bindTouch, touchState } from './input.js';
 import {
   BG_BLUE,
   BIOMES,
+  BRICK,
   CHAR_SKINS,
   CHECKPOINT,
+  COINS,
   DECOS,
   ENEMIES,
   EXIT_DOOR,
-  FIREBALL,
   FRUITS,
   FRUIT_SHEETS,
-  GEMS,
   OBSTACLES,
+  PIPE,
   PLATFORMS,
   POWERUPS,
   TILES_BASE,
@@ -52,12 +53,6 @@ interface Flyer {
   speed: number;
 }
 
-interface Bullet {
-  img: Phaser.Physics.Arcade.Image;
-  vx: number;
-  startX: number;
-}
-
 interface Floater {
   img: Phaser.GameObjects.GameObject;
   baseY: number;
@@ -84,6 +79,27 @@ interface Mover {
   prevX: number;
 }
 
+/** Hongo móvil que sale de los bloques "?". Camina y agranda al tocarlo. */
+interface Shroom {
+  spr: Phaser.Physics.Arcade.Sprite;
+  dir: number;
+  age: number;
+}
+
+/** Tubería warp: huella sólida + boca de entrada/salida. */
+interface Pipe {
+  pid: string;
+  target: string;
+  /** Boca (centro arriba) en px. */
+  mouthX: number;
+  mouthY: number;
+  /** Rect en px para overlap. */
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
 interface Faller {
   spr: Phaser.Physics.Arcade.Sprite;
   homeX: number;
@@ -106,20 +122,16 @@ export class GameScene extends Phaser.Scene {
   private playerSkin: CharSkin = CHAR_SKINS[0];
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyR!: Phaser.Input.Keyboard.Key;
-  private keyJ!: Phaser.Input.Keyboard.Key;
-  private keyShoot!: Phaser.Input.Keyboard.Key;
-  private hasGun = false;
-  private shootCd = 0;
-  private sliding = false;
-  private hp = FEEL.maxHp;
-  private gems = 0;
-  private gemsTotal = 0;
+  private keyRunA!: Phaser.Input.Keyboard.Key;
+  private keyRunB!: Phaser.Input.Keyboard.Key;
+  /** false = chico (1 tile), true = grande (casi 2 tiles). */
+  private big = false;
+  private jumpCutArmed = false;
+  private coins = 0;
+  private crouching = false;
   private won = false;
   private coyote = 0;
   private buffer = 0;
-  private djUsed = false;
-  private dashT = 0;
-  private dashCd = 0;
   private invuln = 0;
   private facing = 1;
   private startX = 0;
@@ -134,8 +146,13 @@ export class GameScene extends Phaser.Scene {
   private movers: Mover[] = [];
   private fallers: Faller[] = [];
   private checkpoints: Phaser.Physics.Arcade.Image[] = [];
-  private boxes: Phaser.Physics.Arcade.Image[] = [];
-  private bullets: Bullet[] = [];
+  private blocks: Phaser.Physics.Arcade.Image[] = [];
+  private bricks: Phaser.Physics.Arcade.Image[] = [];
+  private shrooms: Shroom[] = [];
+  private pipes: Pipe[] = [];
+  private pipeSolids: Phaser.Physics.Arcade.Image[] = [];
+  private solidGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
+  private pipeCd = 0;
   private exitZone: { spr: Phaser.GameObjects.Sprite; open: boolean; x: number; y: number } | null = null;
   private hudGems!: Phaser.GameObjects.Text;
   private hudHp!: Phaser.GameObjects.Text;
@@ -169,8 +186,9 @@ export class GameScene extends Phaser.Scene {
     this.load.image('rock', OBSTACLES.find((o) => o.id === 'rock')!.image!.url);
     this.load.image('spikehead', OBSTACLES.find((o) => o.id === 'spikehead')!.image!.url);
     this.load.image(TRAMP_IDLE.key, TRAMP_IDLE.url);
-    this.load.image(FIREBALL.key, FIREBALL.url);
-    for (const g of GEMS) this.load.image(g.key, g.url);
+    for (const g of COINS) this.load.image(g.key, g.url);
+    this.load.image(PIPE.rim.key, PIPE.rim.url);
+    this.load.image(PIPE.body.key, PIPE.body.url);
     this.load.image(CHECKPOINT.off.key, CHECKPOINT.off.url);
     this.load.image(EXIT_DOOR.idle.key, EXIT_DOOR.idle.url);
     for (const d of DECOS) this.load.image(d.key, d.url);
@@ -214,15 +232,17 @@ export class GameScene extends Phaser.Scene {
     this.movers = [];
     this.fallers = [];
     this.checkpoints = [];
-    this.boxes = [];
-    this.bullets = [];
-    this.hasGun = false;
-    this.shootCd = 0;
-    this.sliding = false;
+    this.blocks = [];
+    this.bricks = [];
+    this.shrooms = [];
+    this.pipes = [];
+    this.pipeSolids = [];
+    this.pipeCd = 0;
+    this.big = false;
+    this.crouching = false;
+    this.jumpCutArmed = false;
     this.exitZone = null;
-    this.hp = FEEL.maxHp;
-    this.gems = 0;
-    this.gemsTotal = 0;
+    this.coins = 0;
     this.won = false;
 
     // Fondo por bioma del nivel.
@@ -231,6 +251,7 @@ export class GameScene extends Phaser.Scene {
 
     // --- Solidos ---
     const solids = this.physics.add.staticGroup();
+    this.solidGroup = solids;
     this.solidSet = new Set(
       level.tiles.filter((t) => t.t === 'ground').map((t) => `${t.x},${t.y}`),
     );
@@ -259,7 +280,8 @@ export class GameScene extends Phaser.Scene {
     const spikes = this.physics.add.staticGroup();
     const hazards = this.physics.add.staticGroup();
     const checkpoints = this.physics.add.staticGroup();
-    const boxes = this.physics.add.staticGroup();
+    const blocks = this.physics.add.staticGroup();
+    const bricks = this.physics.add.staticGroup();
     const start = level.entities.find((e) => e.kind === 'player_start');
     const playerSkinId = (start?.props as { skin?: string } | undefined)?.skin;
     this.playerSkin = skinOf(CHAR_SKINS, playerSkinId, 'pink');
@@ -275,15 +297,12 @@ export class GameScene extends Phaser.Scene {
           this.startY = p.y;
           break;
         }
-        case 'item': {
-          const spr = items.create(cx, cy, 'apple', 0) as Phaser.Physics.Arcade.Image;
-          spr.refreshBody();
-          this.floaters.push({ img: spr, baseY: cy, phase: (cx % 10) * 0.35 });
-          this.gemsTotal++;
-          break;
-        }
+        case 'item':
         case 'fruit': {
-          const skin = FRUITS.find((f) => f.id === props['skin']) ?? FRUITS[0];
+          // Fruta = powerup estilo hongo: agranda. Legacy 'item' igual.
+          const skin = e.kind === 'fruit'
+            ? (FRUITS.find((f) => f.id === props['skin']) ?? FRUITS[0])
+            : FRUITS[0];
           const spr = items.create(cx, cy, skin.key, 0) as Phaser.Physics.Arcade.Image;
           spr.refreshBody();
           this.floaters.push({ img: spr, baseY: cy, phase: (cx % 10) * 0.35 });
@@ -291,12 +310,28 @@ export class GameScene extends Phaser.Scene {
           break;
         }
         case 'gem': {
+          // Moneda: solo puntaje, no abre la salida.
           const color = (props['color'] as string) ?? 'purple';
-          const gem = GEMS.find((g) => g.id === color) ?? GEMS[0];
-          const spr = items.create(cx, cy, gem.key) as Phaser.Physics.Arcade.Image;
+          const coin = COINS.find((g) => g.id === color) ?? COINS[0];
+          const spr = items.create(cx, cy, coin.key) as Phaser.Physics.Arcade.Image;
           spr.refreshBody();
           this.floaters.push({ img: spr, baseY: cy, phase: (cx % 10) * 0.35 });
-          this.gemsTotal++;
+          spr.setData('coin', true);
+          break;
+        }
+        case 'brick': {
+          const spr = bricks.create(cx, cy, BRICK.key) as Phaser.Physics.Arcade.Image;
+          spr.refreshBody();
+          spr.setData('broken', false);
+          this.bricks.push(spr);
+          break;
+        }
+        case 'pipe': {
+          const w = Math.max(1, Math.floor((props['w'] as number | undefined) ?? 2));
+          const h = Math.max(1, Math.floor((props['h'] as number | undefined) ?? 2));
+          const pid = (props['pid'] as string | undefined) ?? '';
+          const target = (props['target'] as string | undefined) ?? '';
+          this.addPipe(e.x, e.y, w, h, pid, target);
           break;
         }
         case 'walker': {
@@ -370,11 +405,10 @@ export class GameScene extends Phaser.Scene {
         }
         case 'powerup': {
           const skin = POWERUPS.find((d) => d.id === (props['skin'] as string | undefined)) ?? POWERUPS[0];
-          const spr = boxes.create(cx, cy, skin.key) as Phaser.Physics.Arcade.Image;
+          const spr = blocks.create(cx, cy, skin.key) as Phaser.Physics.Arcade.Image;
           spr.refreshBody();
-          // Grupo estático: ya es inamovible (StaticBody no tiene setImmovable).
           spr.setData('broken', false);
-          this.boxes.push(spr);
+          this.blocks.push(spr);
           break;
         }
         case 'platform': {
@@ -420,53 +454,53 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // --- Player ---
+    // --- Player (arranca chico: 1 tile) ---
     this.player = this.physics.add.sprite(this.startX, this.startY, this.playerSkin.idle.key, 0);
     this.player.setCollideWorldBounds(true);
-    (this.player.body as Phaser.Physics.Arcade.Body).setSize(14, 26);
+    this.applyForm(false);
     this.makeAnims();
 
     const moverSprites = this.movers.map((m) => m.spr);
     const fallerSprites = this.fallers.map((f) => f.spr);
-    const boxSprites = this.boxes;
+    const blockSprites = this.blocks;
     this.physics.add.collider(this.player, solids);
     this.physics.add.collider(this.player, moverSprites);
     this.physics.add.collider(this.player, fallerSprites);
-    this.physics.add.collider(this.player, boxSprites, (_p, obj) => {
-      this.hitBox(obj as Phaser.Physics.Arcade.Image);
+    this.physics.add.collider(this.player, this.pipeSolids);
+    this.physics.add.collider(this.player, blockSprites, (_p, obj) => {
+      this.hitBlock(obj as Phaser.Physics.Arcade.Image);
+    });
+    this.physics.add.collider(this.player, this.bricks, (_p, obj) => {
+      this.hitBrick(obj as Phaser.Physics.Arcade.Image);
     });
     for (const w of this.walkers) this.physics.add.collider(w.spr, solids);
     for (const w of this.walkers) {
       this.physics.add.collider(w.spr, moverSprites);
       this.physics.add.collider(w.spr, fallerSprites);
+      this.physics.add.collider(w.spr, this.pipeSolids);
     }
     this.physics.add.collider(this.player, items, (_p, obj) => {
       const go = obj as Phaser.GameObjects.GameObject;
-      const isFruit = go.getData?.('fruit') === true;
       go.destroy();
-      if (isFruit) {
-        if (this.hp < FEEL.maxHp) {
-          this.hp++;
-          this.showMsg('+1 ❤');
-        } else {
-          this.showMsg('¡Ñam!');
-        }
-        this.refreshHud();
+      if (go.getData?.('fruit') === true) {
+        this.grow();
         return;
       }
-      this.gems++;
+      // Moneda: solo puntaje.
+      this.coins++;
       this.refreshHud();
-      this.showMsg(this.gems >= this.gemsTotal ? '¡Salida abierta!' : '¡Gema!');
-      if (this.gems >= this.gemsTotal) this.openExit();
+      this.showMsg('+1 🪙');
     });
-    this.physics.add.overlap(this.player, spikes, () => this.damage(1, this.player.x));
+    // La salida abre siempre (las monedas son puntaje).
+    this.openExit();
+    this.physics.add.overlap(this.player, spikes, () => this.damage());
     this.physics.add.overlap(this.player, hazards, (_p, obj) => {
       const go = obj as Phaser.GameObjects.GameObject;
       if (go.getData?.('trampoline') === true) {
         this.bounce(go);
         return;
       }
-      this.damage(1, this.player.x);
+      this.damage();
     });
     for (const w of this.walkers) this.physics.add.overlap(this.player, w.spr, () => this.hitEnemy(w.spr));
     for (const f of this.flyers) this.physics.add.overlap(this.player, f.spr, () => this.hitEnemy(f.spr));
@@ -488,17 +522,14 @@ export class GameScene extends Phaser.Scene {
     // --- Input ---
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keyR = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R);
-    this.keyE = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-    this.keyJ = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.J);
-    this.keyShoot = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.X);
-    this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.K).on('down', () => this.tryShoot());
-    this.input.keyboard!.addCapture(['SPACE', 'UP', 'X']);
+    this.keyRunA = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
+    this.keyRunB = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.J);
+    this.input.keyboard!.addCapture(['SPACE', 'UP']);
     bindTouch(
       () => {
         this.buffer = FEEL.jumpBuffer;
       },
-      () => this.tryDash(),
-      () => this.tryShoot(),
+      () => this.releaseJump(),
     );
   }
 
@@ -524,6 +555,39 @@ export class GameScene extends Phaser.Scene {
       this.bgLayers.push({ ts, factor: l.factor });
     }
   }
+  /** Tubería w×h (origen = tile superior-izquierdo): huella sólida + boca warp. */
+  private addPipe(tx: number, ty: number, w: number, h: number, pid: string, target: string): void {
+    for (let dx = 0; dx < w; dx++) {
+      for (let dy = 0; dy < h; dy++) {
+        this.solidSet.add(`${tx + dx},${ty + dy}`);
+        const tex = dy === 0 ? PIPE.rim.key : PIPE.body.key;
+        this.add.image((tx + dx) * T + T / 2, (ty + dy) * T + T / 2, tex).setDepth(-4);
+      }
+    }
+    // Cuerpo sólido invisible (un rect por tubería).
+    const cx = (tx + w / 2) * T;
+    const cy = (ty + h / 2) * T;
+    const solid = this.physics.add.staticImage(cx, cy, PIPE.body.key);
+    solid.setDisplaySize(w * T, h * T);
+    solid.refreshBody();
+    solid.setVisible(false);
+    (solid.body as Phaser.Physics.Arcade.Body).setSize(w * T, h * T);
+    this.pipeSolids.push(solid);
+    const left = tx * T;
+    const right = (tx + w) * T;
+    const top = ty * T;
+    this.pipes.push({
+      pid,
+      target,
+      mouthX: cx,
+      mouthY: top,
+      left,
+      right,
+      top,
+      bottom: (ty + h) * T,
+    });
+  }
+
   /** Obstáculo en (x,y): estático siempre; los animados con frames manuales. */
   private addHazard(
     hazards: Phaser.GameObjects.Group,
@@ -584,9 +648,9 @@ export class GameScene extends Phaser.Scene {
     this.playOnce(spr, tramp.tex!.key, tramp.tex!.frames, 16, () => {
       if (spr.active) spr.setTexture(TRAMP_IDLE.key);
     });
-    this.player.setVelocityY(-460);
+    this.player.setVelocityY(-FEEL.trampolineVel);
     this.buffer = 0;
-    this.djUsed = false;
+    this.jumpCutArmed = true;
     this.showMsg('¡Boing!');
   }
 
@@ -634,8 +698,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private refreshHud(): void {
-    this.hudGems.setText(`💎 ${this.gems}/${this.gemsTotal}${this.hasGun ? ' 🔥' : ''}`);
-    this.hudHp.setText('❤'.repeat(this.hp) + '🤍'.repeat(Math.max(0, FEEL.maxHp - this.hp)));
+    this.hudGems.setText(`🪙 ${this.coins}`);
+    this.hudHp.setText(this.big ? '● Grande' : '● Chico');
   }
 
   private showMsg(text: string): void {
@@ -652,22 +716,23 @@ export class GameScene extends Phaser.Scene {
     this.showMsg('¡Salida abierta!');
   }
 
-  private damage(amount: number, fromX: number): void {
+  /** Daño estilo Mario: grande→chico con invencibilidad, chico→muerte. */
+  private damage(): void {
     if (this.invuln > 0 || this.won) return;
-    this.hp -= amount;
-    this.refreshHud();
-    if (this.hp <= 0) {
-      this.respawn(true);
+    if (this.big) {
+      this.setCrouch(false);
+      this.applyForm(false);
+      this.invuln = FEEL.invulnTime;
+      this.refreshHud();
+      this.showMsg('¡Achicado!');
       return;
     }
-    const away = this.player.x >= fromX ? 1 : -1;
-    this.player.setVelocity(away * FEEL.knockbackX, -FEEL.knockbackY);
-    this.invuln = FEEL.invulnTime;
-    this.showMsg('¡Ay!');
+    this.respawn();
   }
 
-  private respawn(fullHeal: boolean): void {
-    this.setSlide(false);
+  private respawn(): void {
+    this.crouching = false;
+    this.applyForm(false);
     this.player.setPosition(this.startX, this.startY);
     this.player.setVelocity(0, 0);
     // Si el punto quedó dentro de sólido, subir hasta celda libre.
@@ -679,115 +744,103 @@ export class GameScene extends Phaser.Scene {
     }
     this.coyote = 0;
     this.buffer = 0;
-    this.dashT = 0;
-    this.dashCd = 0;
-    if (fullHeal) {
-      this.hp = FEEL.maxHp;
-      this.hasGun = false;
-      this.refreshHud();
-    }
+    this.jumpCutArmed = false;
+    this.refreshHud();
     this.player.setAlpha(1);
     this.invuln = 1.0;
   }
 
-  private tryDash(): void {
-    if (this.dashCd <= 0 && this.dashT <= 0) {
-      this.dashT = FEEL.dashTime;
-      this.dashCd = FEEL.dashCooldown;
-      this.setSlide(true);
+  /** Chico (1 tile) ↔ grande (~2 tiles). Mantiene los pies plantados.
+   * OJO: el body escala con el sprite, así que se sobredimensiona en
+   * coords de textura para que el body efectivo quede 12x14 / 12x28. */
+  private applyForm(big: boolean): void {
+    this.big = big;
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const scale = big ? 0.9 : 0.55;
+    const w = (big ? FEEL.bigW : FEEL.smallW) / scale;
+    const h = (big ? FEEL.bigH : FEEL.smallH) / scale;
+    this.player.setScale(1);
+    body.setSize(w, h, false);
+    // Body pegado abajo y centrado en el frame 32px.
+    body.setOffset((32 - w) / 2, 32 - h);
+    this.player.setScale(scale);
+  }
+
+  /** Fruta/hongo: agranda (o bonus si ya es grande). */
+  private grow(): void {
+    if (!this.big) {
+      const px = this.player.x;
+      const feetY = (this.player.body as Phaser.Physics.Arcade.Body).bottom;
+      this.setCrouch(false);
+      this.applyForm(true);
+      // Replantar pies donde estaban para no quedar dentro del piso.
+      const nb = this.player.body as Phaser.Physics.Arcade.Body;
+      this.player.y += feetY - nb.bottom;
+      this.refreshHud();
+      this.showMsg('¡Grande!');
+    } else {
+      this.refreshHud();
+      this.showMsg('¡Ñam!');
     }
   }
 
-  /** Achica el body para pasar túneles de 1 tile; al terminar intenta pararse. */
-  private setSlide(on: boolean): void {
-    const body = this.player?.body as Phaser.Physics.Arcade.Body | undefined;
-    if (!body) return;
-    if (on) {
-      if (this.sliding) return;
-      this.sliding = true;
-      // OJO: el body escala con el sprite. Con squash 0.7 hay que sobredimensionar
-      // en coords fuente para que el body efectivo quede 14x14 con los pies plantados
-      // donde estaban parado (fondo del body a 13px del centro).
-      body.setSize(14, 20, false);
-      body.setOffset(9, 14.6);
-      this.player.setScale(1, 0.7);
-      return;
-    }
-    if (!this.sliding) return;
-    if (this.canStand()) {
-      // Restaurar escala ANTES del tamaño, si no el body hereda la deformación.
-      this.player.setScale(1);
-      body.setSize(14, 26);
-      this.sliding = false;
-    }
-  }
-
-  /** Hay 14x26 libres alrededor del jugador para volver a ponerse de pie. */
-  private canStand(): boolean {
-    const hw = 7;
-    const top = this.player.y - 13;
-    const bottom = this.player.y + 13;
-    const left = Math.floor((this.player.x - hw) / T);
-    const right = Math.floor((this.player.x + hw) / T);
-    for (let ty = Math.floor(top / T); ty <= Math.floor((bottom - 1) / T); ty++) {
-      for (let tx = left; tx <= right; tx++) {
-        if (this.solidSet.has(`${tx},${ty}`)) return false;
-      }
-    }
-    return true;
-  }
-
-  /** Caja de poder: solo rompe con cabezazo desde abajo. Da disparo infinito. */
-  private hitBox(box: Phaser.Physics.Arcade.Image): void {
-    if (box.getData('broken') === true) return;
+  /** Bloque "?": solo se activa con cabezazo desde abajo. Suelta un hongo móvil. */
+  private hitBlock(block: Phaser.Physics.Arcade.Image): void {
+    if (block.getData('broken') === true) return;
     const pb = this.player.body as Phaser.Physics.Arcade.Body;
-    const qb = box.body as Phaser.Physics.Arcade.Body;
+    const qb = block.body as Phaser.Physics.Arcade.Body;
     const headbutt = (pb.blocked.up || pb.touching.up) && (qb.blocked.down || qb.touching.down);
     if (!headbutt) return;
-    box.setData('broken', true);
-    box.disableBody(true, true);
-    this.boxes = this.boxes.filter((b) => b !== box);
-    if (!this.hasGun) {
-      this.hasGun = true;
-      this.refreshHud();
-    }
-    this.showMsg('¡Poder de fuego! X para disparar');
+    block.setData('broken', true);
+    block.disableBody(true, true);
+    this.blocks = this.blocks.filter((b) => b !== block);
+    this.spawnShroom(block.x, block.y - T);
+    this.showMsg('¡Hongo!');
   }
 
-  private tryShoot(): void {
-    if (!this.hasGun || this.won || !this.player?.active) return;
-    if (this.shootCd > 0) return;
-    this.shootCd = FEEL.shootCooldown;
-    const img = this.physics.add.image(this.player.x + this.facing * 10, this.player.y, FIREBALL.key);
-    const b = img.body as Phaser.Physics.Arcade.Body;
-    b.setAllowGravity(false);
-    b.setSize(12, 12);
-    const vx = this.facing * FEEL.bulletSpeed;
-    img.setVelocity(vx, 0);
-    const bullet: Bullet = { img, vx, startX: img.x };
-    this.bullets.push(bullet);
-    this.physics.add.collider(img, this.boxes);
-    for (const w of this.walkers) {
-      this.physics.add.overlap(img, w.spr, () => {
-        this.killEnemy(w.spr);
-        this.removeBullet(bullet);
-      });
+  /** Ladrillo: se cabecea desde abajo; chico rebota, grande lo rompe. */
+  private hitBrick(brick: Phaser.Physics.Arcade.Image): void {
+    if (brick.getData('broken') === true) return;
+    const pb = this.player.body as Phaser.Physics.Arcade.Body;
+    const qb = brick.body as Phaser.Physics.Arcade.Body;
+    const headbutt = (pb.blocked.up || pb.touching.up) && (qb.blocked.down || qb.touching.down);
+    if (!headbutt) return;
+    if (this.big && !this.crouching) {
+      brick.setData('broken', true);
+      brick.disableBody(true, true);
+      this.bricks = this.bricks.filter((b) => b !== brick);
+      this.showMsg('¡Roto!');
+      return;
     }
-    for (const f of this.flyers) {
-      this.physics.add.overlap(img, f.spr, () => {
-        this.killEnemy(f.spr);
-        this.removeBullet(bullet);
-      });
-    }
+    // Rebote visual del ladrillo.
+    this.tweens.add({
+      targets: brick,
+      y: brick.y - 4,
+      duration: 70,
+      yoyo: true,
+      onUpdate: () => brick.refreshBody(),
+    });
+    this.showMsg('¡Muy duro!');
   }
 
-  private removeBullet(bullet: Bullet): void {
-    if (!bullet.img.active) return;
-    bullet.img.disableBody(true, true);
-    this.bullets = this.bullets.filter((x) => x !== bullet);
+  /** Hongo móvil: sale del bloque, camina con gravedad y agranda al tocarlo. */
+  private spawnShroom(x: number, y: number): void {
+    const spr = this.physics.add.sprite(x, y, 'foe-mushroom', 0);
+    (spr.body as Phaser.Physics.Arcade.Body).setSize(22, 22);
+    spr.play('foe-mushroom');
+    const shroom: Shroom = { spr, dir: this.facing, age: 0 };
+    this.shrooms.push(shroom);
+    if (this.solidGroup) this.physics.add.collider(spr, this.solidGroup);
+    this.physics.add.collider(spr, this.pipeSolids);
+    this.physics.add.overlap(this.player, spr, () => {
+      if (!spr.active) return;
+      spr.disableBody(true, true);
+      this.shrooms = this.shrooms.filter((s) => s !== shroom);
+      this.grow();
+    });
   }
 
-  /** Elimina un enemigo (pisotón o bala) sin dañar al jugador. */
+  /** Elimina un enemigo (pisotón) sin dañar al jugador. */
   private killEnemy(spr: Phaser.Physics.Arcade.Sprite): void {
     if (!spr.active) return;
     this.walkers = this.walkers.filter((w) => {
@@ -807,7 +860,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Contacto con enemigo: pisotón con rebote alto si cae encima, daño si no. */
+  /** Contacto con enemigo: pisotón rebota (alto si mantenés salto), si no daña. */
   private hitEnemy(spr: Phaser.Physics.Arcade.Sprite): void {
     if (!spr.active || this.won) return;
     const pb = this.player.body as Phaser.Physics.Arcade.Body;
@@ -816,13 +869,93 @@ export class GameScene extends Phaser.Scene {
     const stomp = falling && pb.bottom - eb.top < 12;
     if (stomp) {
       this.killEnemy(spr);
-      this.player.setVelocityY(-FEEL.stompBounce);
+      this.player.setVelocityY(this.jumpHeld() ? -FEEL.stompHigh : -FEEL.stompLow);
       this.buffer = 0;
-      this.djUsed = false;
+      this.jumpCutArmed = true;
       this.showMsg('¡Pisotón!');
       return;
     }
-    this.damage(1, spr.x);
+    this.damage();
+  }
+
+  /** Botón de salto mantenido (teclado o táctil): salto variable + pisotón alto. */
+  private jumpHeld(): boolean {
+    return this.cursors.space.isDown || this.cursors.up.isDown || touchState.jump;
+  }
+
+  /** Corte de salto al soltar (llamado por el botón táctil; en teclado lo detecta el update). */
+  private releaseJump(): void {
+    const vy = (this.player.body as Phaser.Physics.Arcade.Body).velocity.y;
+    if (vy < -FEEL.jumpCut) this.player.setVelocityY(-FEEL.jumpCut);
+    this.jumpCutArmed = false;
+  }
+
+  /** Hay lugar para pararse grande (12x28 libres sobre los pies). */
+  private headroom(): boolean {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const feet = body.bottom;
+    const top = feet - FEEL.bigH;
+    const left = Math.floor((this.player.x - 6) / T);
+    const right = Math.floor((this.player.x + 6) / T);
+    for (let y = Math.floor(top / T); y <= Math.floor((feet - 1) / T); y++) {
+      for (let tx = left; tx <= right; tx++) {
+        if (this.solidSet.has(`${tx},${y}`)) return false;
+      }
+    }
+    return true;
+  }
+
+  /** Agacharse: cuerpo chico + sprite aplastado. Pararse exige techo libre. */
+  private setCrouch(on: boolean): void {
+    if (on === this.crouching) return;
+    if (!on && this.big && !this.headroom()) return;
+    this.crouching = on;
+    if (on) {
+      const body = this.player.body as Phaser.Physics.Arcade.Body;
+      const feet = body.bottom;
+      const s = this.big ? 0.9 : 0.55;
+      const w = FEEL.smallW / s;
+      const h = FEEL.smallH / s;
+      this.player.setScale(1);
+      body.setSize(w, h, false);
+      body.setOffset((32 - w) / 2, 32 - h);
+      this.player.setScale(s, s * 0.8);
+      const nb = this.player.body as Phaser.Physics.Arcade.Body;
+      this.player.y += feet - nb.bottom;
+    } else {
+      this.applyForm(this.big);
+    }
+  }
+
+  /** Entrar a una tubería con ↓ (si tiene destino). */
+  private tryPipe(): void {
+    if (this.pipeCd > 0 || this.won) return;
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    for (const p of this.pipes) {
+      if (
+        this.player.x > p.left - 4 &&
+        this.player.x < p.right + 4 &&
+        body.bottom > p.top - 8 &&
+        body.bottom < p.top + 24
+      ) {
+        if (!p.target) {
+          this.showMsg('Tubería tapada');
+          return;
+        }
+        const dest = this.pipes.find((q) => q.pid === p.target);
+        if (!dest) {
+          this.showMsg('Tubería tapada');
+          return;
+        }
+        this.setCrouch(false);
+        const half = ((this.big ? FEEL.bigH : FEEL.smallH) / 2) + 2;
+        this.player.setPosition(dest.mouthX, dest.mouthY - half);
+        this.player.setVelocity(0, 0);
+        this.pipeCd = 1.0;
+        this.showMsg('¡Warp!');
+        return;
+      }
+    }
   }
 
   private standingOn(plat: Phaser.Physics.Arcade.Sprite): boolean {
@@ -846,7 +979,8 @@ export class GameScene extends Phaser.Scene {
     for (let u = 0; u <= 4 && solidAt(tx, baseY); u++) baseY--;
     for (let d = 0; d <= 6; d++) {
       if (solidAt(tx, baseY + d)) {
-        return { x: tx * T + T / 2, y: (baseY + d) * T - 13 };
+        // Se arranca chico (mitad = 7px).
+        return { x: tx * T + T / 2, y: (baseY + d) * T - 7 };
       }
     }
     // Sin piso debajo: centro de la primera celda libre, nunca dentro de sólido.
@@ -855,7 +989,7 @@ export class GameScene extends Phaser.Scene {
         return { x: tx * T + T / 2, y: (baseY - u) * T + T / 2 };
       }
     }
-    return { x: tx * T + T / 2, y: baseY * T - 13 };
+    return { x: tx * T + T / 2, y: baseY * T - 7 };
   }
 
   override update(_time: number, deltaMs: number): void {
@@ -872,45 +1006,71 @@ export class GameScene extends Phaser.Scene {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     const onFloor = body.blocked.down || body.touching.down;
 
-    this.dashCd = Math.max(0, this.dashCd - delta);
-    this.shootCd = Math.max(0, this.shootCd - delta);
     const left = this.cursors.left.isDown || touchState.left;
     const right = this.cursors.right.isDown || touchState.right;
-    const dir = (right ? 1 : 0) - (left ? 1 : 0);
+    const down = this.cursors.down.isDown || touchState.down;
+    const dir = this.crouching ? 0 : (right ? 1 : 0) - (left ? 1 : 0);
     if (dir !== 0) this.facing = dir;
+    const running = this.keyRunA.isDown || this.keyRunB.isDown || touchState.run;
+    const maxSpeed = running ? FEEL.runMax : FEEL.walkMax;
 
     if (Phaser.Input.Keyboard.JustDown(this.cursors.space) || Phaser.Input.Keyboard.JustDown(this.cursors.up)) {
       this.buffer = FEEL.jumpBuffer;
     }
 
-    // Dash-deslizamiento (J o boton B): achica el body para túneles de 1 tile.
-    if (Phaser.Input.Keyboard.JustDown(this.keyJ)) this.tryDash();
-    if (Phaser.Input.Keyboard.JustDown(this.keyShoot)) this.tryShoot();
-    if (this.dashT > 0) {
-      this.dashT -= delta;
-      this.player.setVelocity(this.facing * FEEL.dashSpeed, 0);
-      if (this.dashT <= 0) this.setSlide(false);
+    // Agacharse (↓): solo en piso; pararse exige techo libre si es grande.
+    if (down && onFloor) this.setCrouch(true);
+    else this.setCrouch(false);
+    // Tubería: ↓ sobre la boca.
+    if (down) this.tryPipe();
+    this.pipeCd = Math.max(0, this.pipeCd - delta);
+
+    // --- Locomoción SMB: aceleración / fricción / derrape ---
+    const vx = body.velocity.x;
+    if (dir !== 0) {
+      const sameDir = Math.sign(vx) === dir || Math.abs(vx) < 1;
+      const rate = onFloor ? (sameDir ? FEEL.accel : FEEL.skid) : FEEL.airAccel;
+      const nvx = Phaser.Math.Clamp(vx + dir * rate * delta, -maxSpeed, maxSpeed);
+      this.player.setVelocityX(nvx);
     } else {
-      if (this.sliding) this.setSlide(false);
-      this.player.setVelocityX(dir * FEEL.speed);
-      if (!onFloor) {
-        this.coyote -= delta;
-      } else {
-        this.coyote = FEEL.coyoteTime;
-        this.djUsed = false;
+      const rate = onFloor ? FEEL.decel : FEEL.airAccel * 0.4;
+      const nvx = Math.abs(vx) <= rate * delta ? 0 : vx - Math.sign(vx) * rate * delta;
+      this.player.setVelocityX(nvx);
+    }
+    // Tope de velocidad al soltar B en carrera.
+    if (!running && Math.abs(body.velocity.x) > FEEL.walkMax && onFloor && dir !== 0) {
+      this.player.setVelocityX(Math.sign(body.velocity.x) * FEEL.walkMax);
+    }
+
+    if (!onFloor) {
+      this.coyote -= delta;
+    } else {
+      this.coyote = FEEL.coyoteTime;
+    }
+    this.buffer -= delta;
+    if (this.buffer > 0 && (this.coyote > 0 || onFloor)) {
+      // Salto más alto a más velocidad (SMB).
+      const speedRatio = Math.min(1, Math.abs(body.velocity.x) / FEEL.runMax);
+      const jumpVel = FEEL.jumpVelWalk + (FEEL.jumpVelRun - FEEL.jumpVelWalk) * speedRatio;
+      this.player.setVelocityY(-jumpVel);
+      this.buffer = 0;
+      this.coyote = 0;
+      this.jumpCutArmed = true;
+    }
+
+    // --- Gravedad variable SMB ---
+    const rising = body.velocity.y < 0;
+    if (rising && !this.jumpHeld()) {
+      if (this.jumpCutArmed && body.velocity.y < -FEEL.jumpCut) {
+        this.player.setVelocityY(-FEEL.jumpCut);
       }
-      this.buffer -= delta;
-      if (this.buffer > 0 && (this.coyote > 0 || onFloor)) {
-        this.player.setVelocityY(-FEEL.jumpVelocity);
-        this.buffer = 0;
-        this.coyote = 0;
-        this.dashT = 0;
-      } else if (this.buffer > 0 && !this.djUsed && !onFloor) {
-        this.player.setVelocityY(-FEEL.jumpVelocity * FEEL.doubleJumpMult);
-        this.buffer = 0;
-        this.djUsed = true;
-        this.dashT = 0;
-      }
+      this.jumpCutArmed = false;
+    }
+    if (!onFloor && (!this.jumpHeld() || body.velocity.y > 0)) {
+      // Gravedad fuerte al caer o sin botón: suma la diferencia sobre la base.
+      this.player.setVelocityY(
+        body.velocity.y + (FEEL.gravityDown - FEEL.gravityUp) * delta,
+      );
     }
 
     // Walkers: patrulla (flip solo si se aleja hacia afuera, sin oscilar).
@@ -934,6 +1094,27 @@ export class GameScene extends Phaser.Scene {
       w.spr.setFlipX(w.dir < 0);
     }
 
+    // Hongos móviles: caminan con gravedad, giran en pared/borde, mueren abajo.
+    for (const s of [...this.shrooms]) {
+      if (!s.spr.active) {
+        this.shrooms = this.shrooms.filter((x) => x !== s);
+        continue;
+      }
+      s.age += delta;
+      const sb = s.spr.body as Phaser.Physics.Arcade.Body;
+      s.spr.setVelocityX(s.dir * 55);
+      if ((sb.blocked.left && s.dir < 0) || (sb.blocked.right && s.dir > 0)) s.dir *= -1;
+      if (sb.blocked.down) {
+        const aheadX = s.spr.x + s.dir * 14;
+        const belowY = s.spr.y + 12;
+        if (!this.solidSet.has(`${Math.floor(aheadX / T)},${Math.floor(belowY / T)}`)) s.dir *= -1;
+      }
+      s.spr.setFlipX(s.dir < 0);
+      if (s.spr.y > this.killY || s.age > 15) {
+        s.spr.disableBody(true, true);
+        this.shrooms = this.shrooms.filter((x) => x !== s);
+      }
+    }
     // Flyers: patrulla lateral a velocidad constante (eje x), seno solo si axis==='y'.
     for (const f of this.flyers) {
       if (!f.spr.active) continue;
@@ -951,21 +1132,6 @@ export class GameScene extends Phaser.Scene {
         }
         f.spr.y = f.baseY + Math.sin(f.t * Math.PI * 2) * 3;
         f.spr.setFlipX(f.dir < 0);
-      }
-    }
-
-    // Balas: alcance 10 tiles, mueren contra paredes o al superar rango.
-    const bulletRange = FEEL.bulletRangeTiles * T;
-    for (const b of [...this.bullets]) {
-      if (!b.img.active) {
-        this.bullets = this.bullets.filter((x) => x !== b);
-        continue;
-      }
-      const bb = b.img.body as Phaser.Physics.Arcade.Body;
-      const btx = Math.floor(b.img.x / T);
-      const bty = Math.floor(b.img.y / T);
-      if (Math.abs(b.img.x - b.startX) > bulletRange || bb.blocked.left || bb.blocked.right || this.solidSet.has(`${btx},${bty}`)) {
-        this.removeBullet(b);
       }
     }
 
@@ -1068,20 +1234,16 @@ export class GameScene extends Phaser.Scene {
     }
 
     // Caida al vacio.
-    if (this.player.y > this.killY) this.respawn(false);
+    if (this.player.y > this.killY) this.respawn();
 
-    // Salida.
+    // Salida (siempre abierta; las monedas son puntaje).
     if (this.exitZone && !this.won) {
       const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.exitZone.x, this.exitZone.y);
       if (d < 30) {
-        if (this.exitZone.open) {
-          this.won = true;
-          this.showMsg(
-            this.fromEditor ? '¡Nivel completo! R rejugar · E editor' : '¡Nivel completo! R para rejugar',
-          );
-        } else {
-          this.showMsg(`Faltan ${this.gemsTotal - this.gems} gemas`);
-        }
+        this.won = true;
+        this.showMsg(
+          this.fromEditor ? '¡Nivel completo! R rejugar · E editor' : '¡Nivel completo! R para rejugar',
+        );
       }
     }
 

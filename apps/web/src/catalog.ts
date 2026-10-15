@@ -47,7 +47,8 @@ import rockUrl from '../../../assets/traps/trap-rockhead.png?url';
 import spikeheadUrl from '../../../assets/traps/trap-spikehead.png?url';
 import trampIdleUrl from '../../../assets/traps/trampoline-idle.png?url';
 import trampJumpUrl from '../../../assets/traps/trampoline-jump.png?url';
-import fireballUrl from '../../../assets/items/fireball.png?url';
+import pipeRimUrl from '../../../assets/pipes/pipe-rim.png?url';
+import pipeBodyUrl from '../../../assets/pipes/pipe-body.png?url';
 import box1Url from '../../../assets/deco/deco-box1.png?url';
 import box2Url from '../../../assets/deco/deco-box2.png?url';
 import box3Url from '../../../assets/deco/deco-box3.png?url';
@@ -136,7 +137,7 @@ export const CHAR_SKINS: CharSkin[] = [
   },
 ];
 
-/** Frutas que curan. key = textura cargada. */
+/** Frutas = powerup estilo hongo: agrandan (chico 1 tile → grande ~2 tiles). */
 export const FRUITS: { id: string; label: string; key: string }[] = [
   { id: 'apple', label: 'Manzana', key: 'apple' },
   { id: 'strawberry', label: 'Frutilla', key: 'strawberry' },
@@ -159,7 +160,8 @@ export const FRUIT_SHEETS: SheetDef[] = [
   sheet('fruit-pineapple', fruitPineapple, 32, 32, 17),
 ];
 
-export const GEMS: { id: string; label: string; key: string; url: string }[] = [
+/** Monedas (ex-gemas): solo puntaje, no abren la salida. key = textura cargada. */
+export const COINS: { id: string; label: string; key: string; url: string }[] = [
   { id: 'purple', label: 'Morada', key: 'gem-purple', url: gemPurple },
   { id: 'blue', label: 'Azul', key: 'gem-blue', url: gemBlue },
   { id: 'red', label: 'Roja', key: 'gem-red', url: gemRed },
@@ -231,8 +233,14 @@ export const OBSTACLES: ObstacleDef[] = [
 
 export const TRAMP_IDLE = { key: 'tramp-idle', url: trampIdleUrl };
 
-/** Bola de fuego del disparo (asset propio 16x16). */
-export const FIREBALL = { key: 'fireball', url: fireballUrl };
+/** Tubería warp propia (boca + cuerpo tileable 16px). */
+export const PIPE = {
+  rim: { key: 'pipe-rim', url: pipeRimUrl },
+  body: { key: 'pipe-body', url: pipeBodyUrl },
+};
+
+/** Ladrillo rompible (reusa arte de cajas). Grande lo rompe, chico rebota. */
+export const BRICK = { key: 'deco-box2', url: box2Url, w: 28, h: 24 };
 
 export const DECOS: { id: string; label: string; key: string; url: string; w: number; h: number }[] = [
   { id: 'box1', label: 'Caja 1', key: 'deco-box1', url: box1Url, w: 28, h: 24 },
@@ -240,11 +248,11 @@ export const DECOS: { id: string; label: string; key: string; url: string; w: nu
   { id: 'box3', label: 'Caja 3', key: 'deco-box3', url: box3Url, w: 28, h: 24 },
 ];
 
-/** Cajas de poder (reusan los sprites de las ex-deco): al romperlas dan disparo infinito. */
+/** Bloque "?": al cabecearlo da powerup (agranda). Reusa sprites de cajas. */
 export const POWERUPS: { id: string; label: string; key: string; url: string; w: number; h: number }[] = [
-  { id: 'box1', label: 'Caja fuego 1', key: 'deco-box1', url: box1Url, w: 28, h: 24 },
-  { id: 'box2', label: 'Caja fuego 2', key: 'deco-box2', url: box2Url, w: 28, h: 24 },
-  { id: 'box3', label: 'Caja fuego 3', key: 'deco-box3', url: box3Url, w: 28, h: 24 },
+  { id: 'box1', label: 'Bloque ? 1', key: 'deco-box1', url: box1Url, w: 28, h: 24 },
+  { id: 'box2', label: 'Bloque ? 2', key: 'deco-box2', url: box2Url, w: 28, h: 24 },
+  { id: 'box3', label: 'Bloque ? 3', key: 'deco-box3', url: box3Url, w: 28, h: 24 },
 ];
 
 export const TILES_BASE = { key: 'tile', url: tilesPaUrl };

@@ -4,15 +4,17 @@ import type { Entity, Level } from '@tinogames/level-schema';
 import {
   BG_BLUE,
   BIOMES,
+  BRICK,
   CHAR_SKINS,
   CHECKPOINT,
+  COINS,
   DECOS,
   ENEMIES,
   EXIT_DOOR,
   FRUITS,
   FRUIT_SHEETS,
-  GEMS,
   OBSTACLES,
+  PIPE,
   PLATFORMS,
   POWERUPS,
   TILES_BASE,
@@ -38,12 +40,12 @@ type Tool =
   | 'enemy'
   | 'fruit'
   | 'gem'
-  | 'item'
   | 'checkpoint'
   | 'platform'
   | 'spikes'
-  | 'deco'
   | 'powerup'
+  | 'brick'
+  | 'pipe'
   | 'exit'
   | 'erase'
   | 'hand';
@@ -73,6 +75,9 @@ export class EditorScene extends Phaser.Scene {
   private powerSkin = 'box1';
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private guideGraphics!: Phaser.GameObjects.Graphics;
+  private boundsGraphics!: Phaser.GameObjects.Graphics;
+  private bgObjs: Phaser.GameObjects.GameObject[] = [];
+  private bgLayers: { ts: Phaser.GameObjects.TileSprite; factor: number }[] = [];
   private ghost!: Phaser.GameObjects.Image;
   private ghostRect!: Phaser.GameObjects.Graphics;
   private sprites: Phaser.GameObjects.GameObject[] = [];
@@ -121,6 +126,11 @@ export class EditorScene extends Phaser.Scene {
 
   override update(): void {
     this.drawGrid();
+    if (this.bgLayers.length > 0 && this.cameras.main) {
+      const sx = this.cameras.main.scrollX;
+      for (const l of this.bgLayers) l.ts.tilePositionX = sx * l.factor;
+    }
+    if (this.cameras.main) this.clampCamera();
   }
 
   private loadSprites(): void {
@@ -142,7 +152,12 @@ export class EditorScene extends Phaser.Scene {
     this.load.image('rock', OBSTACLES.find((o) => o.id === 'rock')!.image!.url);
     this.load.image('spikehead', OBSTACLES.find((o) => o.id === 'spikehead')!.image!.url);
     this.load.image(TRAMP_IDLE.key, TRAMP_IDLE.url);
-    for (const g of GEMS) this.load.image(g.key, g.url);
+    for (const g of COINS) this.load.image(g.key, g.url);
+    for (const b of BIOMES) {
+      for (const l of b.layers) this.load.image(l.key, l.url);
+    }
+    this.load.image(PIPE.rim.key, PIPE.rim.url);
+    this.load.image(PIPE.body.key, PIPE.body.url);
     this.load.image(CHECKPOINT.off.key, CHECKPOINT.off.url);
     this.load.image(EXIT_DOOR.idle.key, EXIT_DOOR.idle.url);
     for (const d of DECOS) this.load.image(d.key, d.url);
@@ -167,13 +182,88 @@ export class EditorScene extends Phaser.Scene {
   private setupScene(): void {
     this.gridGraphics = this.add.graphics();
     this.guideGraphics = this.add.graphics().setDepth(90);
+    this.boundsGraphics = this.add.graphics().setDepth(80);
     this.ghost = this.add.image(0, 0, 'tile', 0).setAlpha(0.5).setDepth(100).setVisible(false);
     this.ghostRect = this.add.graphics().setDepth(100).setVisible(false);
     this.centerCamera();
+    this.renderBackground();
     this.renderLevel();
     this.bindUi();
     this.setupInput();
     this.updateStatus();
+  }
+
+  /** Rectángulo del nivel en tiles (lo pintado + margen de aire). */
+  private levelBounds(): { minX: number; minY: number; maxX: number; maxY: number } {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const t of this.level.tiles) {
+      minX = Math.min(minX, t.x);
+      minY = Math.min(minY, t.y);
+      maxX = Math.max(maxX, t.x);
+      maxY = Math.max(maxY, t.y);
+    }
+    for (const e of this.level.entities) {
+      minX = Math.min(minX, e.x);
+      minY = Math.min(minY, e.y);
+      maxX = Math.max(maxX, e.x);
+      maxY = Math.max(maxY, e.y);
+    }
+    if (minX === Infinity) return { minX: 0, minY: 0, maxX: 29, maxY: 15 };
+    return { minX, minY, maxX, maxY };
+  }
+
+  /** Fondo del bioma en vivo (igual que en juego) + velo oscuro para legibilidad. */
+  private renderBackground(): void {
+    for (const o of this.bgObjs) o.destroy();
+    this.bgObjs = [];
+    this.bgLayers = [];
+    const biome = BIOMES.find((b) => b.id === this.level.bg) ?? BIOMES.find((b) => b.id === 'blue')!;
+    for (const l of biome.layers) {
+      let obj: Phaser.GameObjects.GameObject;
+      if (l.factor === 0 && l.anchor === 'fill' && l.h === 64) {
+        obj = this.add.tileSprite(240, 135, 480, 270, l.key).setScrollFactor(0).setDepth(-10);
+      } else if (l.factor === 0) {
+        obj = this.add.image(240, 135, l.key).setScrollFactor(0).setDepth(-10).setDisplaySize(480, 270);
+      } else {
+        const y = l.anchor === 'top' ? l.h / 2 : 270 - l.h / 2;
+        const ts = this.add.tileSprite(240, y, 480, l.h, l.key).setScrollFactor(0).setDepth(-10);
+        if (l.anchor === 'fill') {
+          const src = this.textures.get(l.key).getSourceImage() as { width: number; height: number };
+          ts.setTileScale(480 / src.width, 270 / src.height);
+        }
+        this.bgLayers.push({ ts, factor: l.factor });
+        obj = ts;
+      }
+      this.bgObjs.push(obj);
+    }
+    // Velo para que grilla y sprites se lean sobre biomas claros.
+    const veil = this.add
+      .rectangle(240, 135, 480, 270, 0x0a0a18, 0.3)
+      .setScrollFactor(0)
+      .setDepth(-9);
+    this.bgObjs.push(veil);
+  }
+
+  /** No deja perder la cámara fuera del nivel + margen. */
+  private clampCamera(): void {
+    const cam = this.cameras.main;
+    const b = this.levelBounds();
+    const M = 20 * T;
+    const minCX = b.minX * T - M;
+    const maxCX = (b.maxX + 1) * T + M;
+    const minCY = Math.min(0, b.minY * T) - M;
+    const maxCY = (b.maxY + 1) * T + M;
+    const viewW = this.scale.width / cam.zoom;
+    const viewH = this.scale.height / cam.zoom;
+    const clampAxis = (scroll: number, view: number, lo: number, hi: number): number => {
+      if (hi - lo <= view) return (lo + hi) / 2 - view / 2;
+      return Phaser.Math.Clamp(scroll, lo - view / 2, hi - view / 2);
+    };
+    cam.scrollX = clampAxis(cam.scrollX, viewW, minCX, maxCX);
+    cam.scrollY = clampAxis(cam.scrollY, viewH, minCY, maxCY);
   }
 
   private centerCamera(): void {
@@ -332,7 +422,7 @@ export class EditorScene extends Phaser.Scene {
         return { tex: f.key, frame: 0, h: 14, fh: 32 };
       }
       case 'gem': {
-        const gem = GEMS.find((x) => x.id === props?.['color']) ?? GEMS[0];
+        const gem = COINS.find((x) => x.id === props?.['color']) ?? COINS[0];
         return { tex: gem.key, h: 14, fh: 32 };
       }
       case 'item':
@@ -360,6 +450,12 @@ export class EditorScene extends Phaser.Scene {
         const d = POWERUPS.find((x) => x.id === props?.['skin']) ?? POWERUPS[0];
         return { tex: d.key, h: 18, fh: d.h };
       }
+      case 'brick': {
+        return { tex: BRICK.key, h: 18, fh: BRICK.h };
+      }
+      case 'pipe': {
+        return { tex: PIPE.rim.key, h: 16, fh: 16 };
+      }
       case 'deco': {
         const d = DECOS.find((x) => x.id === props?.['skin']) ?? DECOS[0];
         return { tex: d.key, h: 18, fh: d.h };
@@ -386,6 +482,20 @@ export class EditorScene extends Phaser.Scene {
     for (const entity of this.level.entities) {
       const cx = entity.x * T + T / 2;
       const cy = entity.y * T + T / 2;
+      if (entity.kind === 'pipe') {
+        // Huella w×h: boca arriba, cuerpo debajo.
+        const w = Math.max(1, Math.floor(((entity.props as { w?: number } | undefined)?.w) ?? 2));
+        const h = Math.max(1, Math.floor(((entity.props as { h?: number } | undefined)?.h) ?? 2));
+        for (let dx = 0; dx < w; dx++) {
+          for (let dy = 0; dy < h; dy++) {
+            const tex = dy === 0 ? PIPE.rim.key : PIPE.body.key;
+            const sprite = this.add.image((entity.x + dx) * T, (entity.y + dy) * T, tex);
+            sprite.setOrigin(0, 0);
+            this.sprites.push(sprite);
+          }
+        }
+        continue;
+      }
       const p = this.preview(entity.kind, entity.props as Record<string, unknown> | undefined);
       const sprite = this.add.image(cx, cy, p.tex, p.frame);
       sprite.setOrigin(0.5, 0.5);
@@ -400,6 +510,22 @@ export class EditorScene extends Phaser.Scene {
       this.guideGraphics.lineStyle(2, 0xffd23f, 0.6);
       this.guideGraphics.strokeRect(start.x * T + T / 2 - 240, start.y * T + T / 2 - 135, 480, 270);
     }
+
+    // Límites: caja del nivel, techo y=0 y línea de muerte (maxY+3, como en juego).
+    const g = this.boundsGraphics;
+    g.clear();
+    const b = this.levelBounds();
+    const x0 = b.minX * T;
+    const y0 = b.minY * T;
+    const x1 = (b.maxX + 1) * T;
+    const y1 = (b.maxY + 1) * T;
+    g.lineStyle(2, 0xffd23f, 0.8);
+    g.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    g.lineStyle(2, 0x33ddff, 0.7);
+    g.lineBetween(x0 - T, 0, x1 + T, 0);
+    const killY = (b.maxY + 3) * T;
+    g.lineStyle(2, 0xff4444, 0.8);
+    g.lineBetween(x0 - T, killY, x1 + T, killY);
   }
 
   private bindUi(): void {
@@ -463,6 +589,7 @@ export class EditorScene extends Phaser.Scene {
     this.dirty = false;
     this.lastPaintKey = '';
     this.centerCamera();
+    this.renderBackground();
     this.renderLevel();
     this.syncNameInput();
     this.updateStatus();
@@ -642,8 +769,8 @@ export class EditorScene extends Phaser.Scene {
 
   private buildGemasFlyout(fly: HTMLElement): void {
     const grid = this.fgrid(fly);
-    for (const g of GEMS) {
-      this.fopt(grid, g.label, this.sheetThumb(g.url, 32, 32, 1), () => {
+    for (const g of COINS) {
+      this.fopt(grid, `Moneda ${g.label}`, this.sheetThumb(g.url, 32, 32, 1), () => {
         this.gemColor = g.id;
         this.tool = 'gem';
       });
@@ -692,7 +819,8 @@ export class EditorScene extends Phaser.Scene {
         this.dirty = true;
         this.closeFlyout();
         this.refreshRail();
-        this.flashStatus(`Fondo: ${b.label} (guardá para aplicar)`, true);
+        this.renderBackground();
+        this.flashStatus(`Fondo: ${b.label}`, true);
       };
       grid.appendChild(wrap);
     }
@@ -700,9 +828,6 @@ export class EditorScene extends Phaser.Scene {
 
   private buildOtrosFlyout(fly: HTMLElement): void {
     const grid = this.fgrid(fly);
-    this.fopt(grid, 'Item', this.sheetThumb(FRUIT_SHEETS[0].url, 32, 32, 17), () => {
-      this.tool = 'item';
-    });
     this.fopt(grid, 'Checkpoint', this.sheetThumb(CHECKPOINT.off.url, 64, 64, 1), () => {
       this.tool = 'checkpoint';
     });
@@ -720,6 +845,12 @@ export class EditorScene extends Phaser.Scene {
         this.tool = 'powerup';
       });
     }
+    this.fopt(grid, 'Ladrillo', this.sheetThumb(BRICK.url, BRICK.w, BRICK.h, 1), () => {
+      this.tool = 'brick';
+    });
+    this.fopt(grid, 'Tubería 2×2', this.sheetThumb(PIPE.rim.url, 16, 16, 1), () => {
+      this.tool = 'pipe';
+    });
     this.fopt(grid, 'Salida', this.sheetThumb(EXIT_DOOR.idle.url, 64, 64, 1), () => {
       this.tool = 'exit';
     });
@@ -758,7 +889,7 @@ export class EditorScene extends Phaser.Scene {
       const sheet = FRUIT_SHEETS.find((s) => s.key === (FRUITS.find((f) => f.id === sel.props['skin']) ?? FRUITS[0]).key)!;
       url = sheet.url; fw = 32; frames = sheet.frames;
     } else if (sel.kind === 'gem') {
-      url = (GEMS.find((g) => g.id === sel.props['color']) ?? GEMS[0]).url; fw = 32; frames = 1;
+      url = (COINS.find((g) => g.id === sel.props['color']) ?? COINS[0]).url; fw = 32; frames = 1;
     } else if (sel.kind === 'item') {
       url = FRUIT_SHEETS[0].url; fw = 32; frames = 17;
     } else if (sel.kind === 'checkpoint') {
@@ -773,6 +904,10 @@ export class EditorScene extends Phaser.Scene {
     } else if (sel.kind === 'powerup') {
       const d = POWERUPS.find((x) => x.id === sel.props['skin']) ?? POWERUPS[0];
       url = d.url; fw = d.w; frames = 1;
+    } else if (sel.kind === 'brick') {
+      url = BRICK.url; fw = BRICK.w; frames = 1;
+    } else if (sel.kind === 'pipe') {
+      url = PIPE.rim.url; fw = 16; frames = 1;
     } else if (sel.kind === 'deco') {
       const d = DECOS.find((x) => x.id === sel.props['skin']) ?? DECOS[0];
       url = d.url; fw = d.w; frames = 1;
@@ -789,12 +924,13 @@ export class EditorScene extends Phaser.Scene {
       case 'player_start': return (CHAR_SKINS.find((c) => c.id === this.playerSkin) ?? CHAR_SKINS[0]).label;
       case 'enemy': return (ENEMIES.find((e) => e.id === this.enemySkin) ?? ENEMIES[0]).label;
       case 'fruit': return (FRUITS.find((f) => f.id === this.fruitSkin) ?? FRUITS[0]).label;
-      case 'gem': return (GEMS.find((g) => g.id === this.gemColor) ?? GEMS[0]).label;
-      case 'item': return 'Item';
+      case 'gem': return `Moneda ${(COINS.find((g) => g.id === this.gemColor) ?? COINS[0]).label}`;
       case 'checkpoint': return 'Checkpoint';
       case 'platform': return this.platformAxis === 'fall' ? 'Plataforma que cae' : 'Plataforma móvil';
       case 'spikes': return (OBSTACLES.find((o) => o.id === this.obstacle) ?? OBSTACLES[0]).label;
       case 'powerup': return (POWERUPS.find((d) => d.id === this.powerSkin) ?? POWERUPS[0]).label;
+      case 'brick': return 'Ladrillo';
+      case 'pipe': return 'Tubería';
       case 'exit': return 'Salida';
       case 'erase': return 'Borrar';
       case 'hand': return 'Mano';
@@ -986,6 +1122,7 @@ export class EditorScene extends Phaser.Scene {
             this.level = level;
             this.dirty = true;
             this.centerCamera();
+            this.renderBackground();
             this.renderLevel();
             this.updateStatus();
             this.flashStatus('Nivel importado', true);
@@ -1204,8 +1341,6 @@ export class EditorScene extends Phaser.Scene {
         return { kind: 'fruit', props: { skin: this.fruitSkin } };
       case 'gem':
         return { kind: 'gem', props: { color: this.gemColor } };
-      case 'item':
-        return { kind: 'item', props: {} };
       case 'checkpoint':
         return { kind: 'checkpoint', props: {} };
       case 'platform':
@@ -1214,8 +1349,12 @@ export class EditorScene extends Phaser.Scene {
         return { kind: 'spikes', props: this.obstacle !== 'spikes' ? { variant: this.obstacle } : {} };
       case 'powerup':
         return { kind: 'powerup', props: { skin: this.powerSkin } };
+      case 'brick':
+        return { kind: 'brick', props: {} };
+      case 'pipe':
+        return { kind: 'pipe', props: { w: 2, h: 2 } };
       case 'exit':
-        return { kind: 'exit', props: { needsAllItems: true } };
+        return { kind: 'exit', props: {} };
       default:
         return null;
     }
@@ -1232,10 +1371,47 @@ export class EditorScene extends Phaser.Scene {
 
     const entity: Entity = Object.keys(props).length > 0 ? { kind, x, y, props } : { kind, x, y };
     this.level.entities.push(entity as Entity);
+    if (kind === 'pipe') this.linkPipe(entity as Entity);
+  }
+
+  /** Auto-enlaza la tubería recién pintada con la última boca sin destino (ida y vuelta). */
+  private linkPipe(pipe: Entity): void {
+    const pp = (pipe.props ?? {}) as Record<string, unknown>;
+    const pipes = this.level.entities.filter((e) => e.kind === 'pipe' && e !== pipe);
+    const used = new Set<number>();
+    for (const e of pipes) {
+      const m = /^P(\d+)$/.exec((e.props as { pid?: unknown } | undefined)?.pid as string ?? '');
+      if (m) used.add(Number(m[1]));
+    }
+    let n = 1;
+    while (used.has(n)) n++;
+    pp['pid'] = `P${n}`;
+    pipe.props = pp as Entity['props'];
+    const lone = [...pipes].reverse().find((e) => {
+      const q = (e.props ?? {}) as Record<string, unknown>;
+      return !q['target'];
+    });
+    if (lone) {
+      const qp = (lone.props ?? {}) as Record<string, unknown>;
+      qp['target'] = pp['pid'];
+      pp['target'] = qp['pid'];
+      lone.props = qp as Entity['props'];
+      pipe.props = pp as Entity['props'];
+    }
   }
 
   private eraseAt(x: number, y: number): void {
+    // Al borrar una boca, las que apuntaban a ella quedan tapadas.
+    const gone = this.level.entities.find((e) => e.x === x && e.y === y && e.kind === 'pipe');
+    const gonePid = (gone?.props as { pid?: unknown } | undefined)?.pid;
     this.level.tiles = this.level.tiles.filter((t) => !(t.x === x && t.y === y));
     this.level.entities = this.level.entities.filter((e) => !(e.x === x && e.y === y));
+    if (typeof gonePid === 'string' && gonePid) {
+      for (const e of this.level.entities) {
+        if (e.kind !== 'pipe') continue;
+        const p = (e.props ?? {}) as Record<string, unknown>;
+        if (p['target'] === gonePid) delete p['target'];
+      }
+    }
   }
 }

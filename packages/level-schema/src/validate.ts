@@ -23,7 +23,12 @@ function solidAt(solids: Set<string>, x: number, y: number): boolean {
  * - spikes y obstaculos (saw/fire/arrow/rock/spikehead/trampoline): estaticos,
  *   se pueden poner en cualquier ubicacion en aire (solo se rechaza si quedan
  *   dentro de solido).
- * - powerup (cajas box1/box2/box3): rompible, solo exige no estar en solido.
+ * - powerup (bloques box1/box2/box3): se cabecean desde abajo, sueltan hongo.
+ *   Solo exigen no estar en solido. 'item' legacy se trata como fruta.
+ * - brick (ladrillo): se cabecea desde abajo; chico rebota, grande rompe.
+ *   Solo exige no estar en solido.
+ * - pipe (tubería w×h, por defecto 2×2, sólida): la huella no puede estar
+ *   en sólido; el target es solo un id (puede colgar, en juego no viaja).
  */
 export function validateLevel(level: Level): ValidationError[] {
   const errors: ValidationError[] = [];
@@ -129,10 +134,24 @@ export function validateLevel(level: Level): ValidationError[] {
       case 'platform':
       case 'deco':
       case 'powerup':
+      case 'brick':
         if (solidAt(solids, e.x, e.y)) {
           fail('inside-solid', `${e.kind} at (${e.x},${e.y}) is inside solid`);
         }
         break;
+      case 'pipe': {
+        const w = Math.max(1, Math.floor((e.props as { w?: number } | undefined)?.w ?? 2));
+        const h = Math.max(1, Math.floor((e.props as { h?: number } | undefined)?.h ?? 2));
+        for (let dx = 0; dx < w; dx++) {
+          for (let dy = 0; dy < h; dy++) {
+            if (solidAt(solids, e.x + dx, e.y + dy)) {
+              fail('inside-solid', `pipe at (${e.x},${e.y}) is inside solid`);
+              break;
+            }
+          }
+        }
+        break;
+      }
       case 'spikes': {
         const w = Math.max(1, Math.floor((e.props as { w?: number } | undefined)?.w ?? 1));
         const h = Math.max(1, Math.floor((e.props as { h?: number } | undefined)?.h ?? 1));

@@ -29,8 +29,18 @@ describe('validateLevel', () => {
       { kind: 'checkpoint', x: ground.x, y: ground.y - 1 },
       { kind: 'platform', x: ground.x, y: ground.y - 4 },
       { kind: 'deco', x: ground.x, y: ground.y - 1 },
+      { kind: 'brick', x: ground.x, y: ground.y - 5 },
+      { kind: 'pipe', x: 40, y: 1, props: { w: 2, h: 2, pid: 'P9', target: 'P1' } },
     );
     expect(validateLevel(level)).toEqual([]);
+  });
+
+  it('rejects a pipe footprint inside solid ground', () => {
+    const level = loadSample();
+    const ground = level.tiles.find((t) => t.t === 'ground')!;
+    level.entities.push({ kind: 'pipe', x: ground.x, y: ground.y, props: { w: 2, h: 2 } });
+    const codes = validateLevel(level).map((e) => e.code);
+    expect(codes).toContain('inside-solid');
   });
 
   it('rejects a checkpoint floating in the air', () => {
@@ -100,9 +110,9 @@ describe('validateLevel', () => {
     expect(codes).toContain('needs-ground');
   });
 
-  it('rejects an item inside solid ground', () => {
+  it('rejects a fruit powerup inside solid ground', () => {
     const level = loadSample();
-    const item = level.entities.find((e) => e.kind === 'item');
+    const item = level.entities.find((e) => e.kind === 'fruit');
     item!.x = 2;
     item!.y = 10;
     const codes = validateLevel(level).map((e) => e.code);

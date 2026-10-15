@@ -135,7 +135,6 @@ def gen_sky():
 
 
 def gen_heart():
-    """Corazón 14px para la vida."""
     c = C(14, 14)
     for y, row in enumerate([".XX.XX.", "XXXXXXX", "XXXXXXX", ".XXXXX.", "..XXX..", "...X..."]):
         for x, ch in enumerate(row):
@@ -165,12 +164,34 @@ def gen_hills():
     c.save("bg_hills.png")
 
 
+PIPE = (46, 160, 90, 255)
+PIPE_D = (28, 110, 60, 255)
+PIPE_L = (120, 220, 150, 255)
+
+
+def gen_pipes():
+    """Tubería warp propia 16px: borde (boca) + cuerpo tileable."""
+    rim = C(16, 16)
+    rim.rect(0, 0, 15, 15, PIPE_D)
+    rim.rect(1, 1, 14, 13, PIPE)
+    rim.rect(3, 1, 5, 13, PIPE_L)
+    rim.rect(1, 13, 14, 13, PIPE_D)
+    rim.save("pipes/pipe-rim.png")
+    body = C(16, 16)
+    body.rect(0, 0, 15, 15, PIPE_D)
+    body.rect(2, 0, 13, 15, PIPE)
+    body.rect(4, 0, 6, 15, PIPE_L)
+    body.save("pipes/pipe-body.png")
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / "pipes").mkdir(parents=True, exist_ok=True)
     gen_kid()
     gen_sky()
     gen_hills()
     gen_heart()
+    gen_pipes()
 
 
 if __name__ == "__main__":

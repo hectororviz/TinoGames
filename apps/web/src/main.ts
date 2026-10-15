@@ -13,7 +13,7 @@ const game = new Phaser.Game({
   pixelArt: true,
   physics: {
     default: 'arcade',
-    arcade: { gravity: { x: 0, y: FEEL.gravity }, debug: false },
+    arcade: { gravity: { x: 0, y: FEEL.gravityUp }, debug: false },
   },
   scale: {
     mode: Phaser.Scale.FIT,

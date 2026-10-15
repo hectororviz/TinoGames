@@ -1,407 +1,127 @@
 {
   "format": 2,
-  "game": "0.2",
+  "game": "0.3",
   "theme": "pixel-adventure",
+  "bg": "dia",
   "tiles": [
-    {
-      "x": 0,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 0,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 1,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 1,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 2,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 2,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 3,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 3,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 4,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 4,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 5,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 5,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 6,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 6,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 7,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 7,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 8,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 8,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 9,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 9,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 12,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 12,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 13,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 13,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 14,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 14,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 15,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 15,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 16,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 16,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 17,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 17,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 18,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 18,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 19,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 19,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 22,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 22,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 23,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 23,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 24,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 24,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 25,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 25,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 26,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 26,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 27,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 27,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 28,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 28,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 29,
-      "y": 10,
-      "t": "ground"
-    },
-    {
-      "x": 29,
-      "y": 11,
-      "t": "ground"
-    },
-    {
-      "x": 4,
-      "y": 7,
-      "t": "ground"
-    },
-    {
-      "x": 5,
-      "y": 7,
-      "t": "ground"
-    },
-    {
-      "x": 6,
-      "y": 7,
-      "t": "ground"
-    },
-    {
-      "x": 7,
-      "y": 7,
-      "t": "ground"
-    },
-    {
-      "x": 8,
-      "y": 7,
-      "t": "ground"
-    },
-    {
-      "x": 9,
-      "y": 7,
-      "t": "ground"
-    },
-    {
-      "x": 14,
-      "y": 6,
-      "t": "ground"
-    },
-    {
-      "x": 15,
-      "y": 6,
-      "t": "ground"
-    },
-    {
-      "x": 16,
-      "y": 6,
-      "t": "ground"
-    },
-    {
-      "x": 17,
-      "y": 6,
-      "t": "ground"
-    },
-    {
-      "x": 18,
-      "y": 6,
-      "t": "ground"
-    },
-    {
-      "x": 19,
-      "y": 6,
-      "t": "ground"
-    }
+    { "x": 0, "y": 10, "t": "ground" },
+    { "x": 0, "y": 11, "t": "ground" },
+    { "x": 1, "y": 10, "t": "ground" },
+    { "x": 1, "y": 11, "t": "ground" },
+    { "x": 2, "y": 10, "t": "ground" },
+    { "x": 2, "y": 11, "t": "ground" },
+    { "x": 3, "y": 10, "t": "ground" },
+    { "x": 3, "y": 11, "t": "ground" },
+    { "x": 4, "y": 10, "t": "ground" },
+    { "x": 4, "y": 11, "t": "ground" },
+    { "x": 5, "y": 10, "t": "ground" },
+    { "x": 5, "y": 11, "t": "ground" },
+    { "x": 6, "y": 10, "t": "ground" },
+    { "x": 6, "y": 11, "t": "ground" },
+    { "x": 7, "y": 10, "t": "ground" },
+    { "x": 7, "y": 11, "t": "ground" },
+    { "x": 8, "y": 10, "t": "ground" },
+    { "x": 8, "y": 11, "t": "ground" },
+    { "x": 9, "y": 10, "t": "ground" },
+    { "x": 9, "y": 11, "t": "ground" },
+    { "x": 12, "y": 10, "t": "ground" },
+    { "x": 12, "y": 11, "t": "ground" },
+    { "x": 13, "y": 10, "t": "ground" },
+    { "x": 13, "y": 11, "t": "ground" },
+    { "x": 14, "y": 10, "t": "ground" },
+    { "x": 14, "y": 11, "t": "ground" },
+    { "x": 15, "y": 10, "t": "ground" },
+    { "x": 15, "y": 11, "t": "ground" },
+    { "x": 16, "y": 10, "t": "ground" },
+    { "x": 16, "y": 11, "t": "ground" },
+    { "x": 17, "y": 10, "t": "ground" },
+    { "x": 17, "y": 11, "t": "ground" },
+    { "x": 18, "y": 10, "t": "ground" },
+    { "x": 18, "y": 11, "t": "ground" },
+    { "x": 19, "y": 10, "t": "ground" },
+    { "x": 19, "y": 11, "t": "ground" },
+    { "x": 20, "y": 10, "t": "ground" },
+    { "x": 20, "y": 11, "t": "ground" },
+    { "x": 21, "y": 10, "t": "ground" },
+    { "x": 21, "y": 11, "t": "ground" },
+    { "x": 22, "y": 10, "t": "ground" },
+    { "x": 22, "y": 11, "t": "ground" },
+    { "x": 23, "y": 10, "t": "ground" },
+    { "x": 23, "y": 11, "t": "ground" },
+    { "x": 24, "y": 10, "t": "ground" },
+    { "x": 24, "y": 11, "t": "ground" },
+    { "x": 25, "y": 10, "t": "ground" },
+    { "x": 25, "y": 11, "t": "ground" },
+    { "x": 26, "y": 10, "t": "ground" },
+    { "x": 26, "y": 11, "t": "ground" },
+    { "x": 27, "y": 10, "t": "ground" },
+    { "x": 27, "y": 11, "t": "ground" },
+    { "x": 28, "y": 10, "t": "ground" },
+    { "x": 28, "y": 11, "t": "ground" },
+    { "x": 29, "y": 10, "t": "ground" },
+    { "x": 29, "y": 11, "t": "ground" },
+    { "x": 4, "y": 7, "t": "ground" },
+    { "x": 5, "y": 7, "t": "ground" },
+    { "x": 6, "y": 7, "t": "ground" },
+    { "x": 7, "y": 7, "t": "ground" },
+    { "x": 8, "y": 7, "t": "ground" },
+    { "x": 24, "y": 7, "t": "ground" },
+    { "x": 24, "y": 8, "t": "ground" }
   ],
   "entities": [
-    {
-      "kind": "player_start",
-      "x": 2,
-      "y": 9
-    },
+    { "kind": "player_start", "x": 2, "y": 9 },
     {
       "kind": "walker",
-      "x": 6,
+      "x": 18,
       "y": 9,
-      "props": {
-        "range": 3,
-        "speed": 40
-      }
+      "props": { "range": 3, "speed": 40 }
     },
     {
       "kind": "walker",
+      "x": 19,
+      "y": 9,
+      "props": { "range": 2, "speed": 40 }
+    },
+    {
+      "kind": "flyer",
+      "x": 17,
+      "y": 5,
+      "props": { "axis": "x", "range": 2, "speed": 50, "amp": 1, "freq": 1.5 }
+    },
+    { "kind": "fruit", "x": 5, "y": 6, "props": { "skin": "apple" } },
+    { "kind": "brick", "x": 5, "y": 5 },
+    { "kind": "brick", "x": 6, "y": 5 },
+    {
+      "kind": "powerup",
       "x": 7,
       "y": 6,
-      "props": {
-        "range": 2,
-        "speed": 40
-      }
+      "props": { "skin": "box1" }
     },
     {
-      "kind": "flyer",
-      "x": 17,
-      "y": 4,
-      "props": {
-        "amp": 1,
-        "freq": 1.5
-      }
-    },
-    {
-      "kind": "flyer",
-      "x": 25,
+      "kind": "pipe",
+      "x": 13,
       "y": 8,
-      "props": {
-        "amp": 1,
-        "freq": 1
-      }
+      "props": { "w": 2, "h": 2, "pid": "P1", "target": "P2" }
     },
     {
-      "kind": "item",
-      "x": 7,
-      "y": 3
-    },
-    {
-      "kind": "item",
-      "x": 17,
-      "y": 5
-    },
-    {
-      "kind": "item",
-      "x": 11,
-      "y": 8
-    },
-    {
-      "kind": "item",
+      "kind": "pipe",
       "x": 26,
-      "y": 7
+      "y": 8,
+      "props": { "w": 2, "h": 2, "pid": "P2", "target": "P1" }
     },
+    { "kind": "gem", "x": 11, "y": 8, "props": { "color": "purple" } },
+    { "kind": "gem", "x": 21, "y": 8, "props": { "color": "blue" } },
+    { "kind": "checkpoint", "x": 16, "y": 9 },
     {
       "kind": "spikes",
       "x": 22,
-      "y": 7,
-      "props": {
-        "w": 1,
-        "h": 3
-      }
+      "y": 9,
+      "props": { "w": 1, "h": 1 }
     },
     {
       "kind": "exit",
-      "x": 27,
-      "y": 9,
-      "props": {
-        "needsAllItems": true
-      }
+      "x": 28,
+      "y": 9
     }
   ]
 }

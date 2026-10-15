@@ -22,7 +22,6 @@ export interface Tile {
 
 export type EntityKind =
   | 'player_start'
-  | 'item'
   | 'fruit'
   | 'gem'
   | 'walker'
@@ -32,6 +31,8 @@ export type EntityKind =
   | 'platform'
   | 'deco'
   | 'powerup'
+  | 'brick'
+  | 'pipe'
   | 'exit'
   | (string & {});
 
@@ -65,12 +66,12 @@ export interface FlyerProps {
 }
 
 export interface FruitProps {
-  /** Fruta: apple | strawberry | bananas | cherries | kiwi | melon | orange | pineapple. */
+  /** Powerup estilo hongo (agranda): apple | strawberry | bananas | cherries | kiwi | melon | orange | pineapple. */
   skin?: string;
 }
 
 export interface GemProps {
-  /** Color: purple | blue | red. Por defecto purple. */
+  /** Moneda: purple | blue | red. Por defecto purple. Solo puntaje, no abre la salida. */
   color?: string;
 }
 
@@ -89,8 +90,19 @@ export interface DecoProps {
 }
 
 export interface PowerupProps {
-  /** Caja de poder: box1 | box2 | box3. Por defecto box1. */
+  /** Bloque "?": box1 | box2 | box3. Se cabecea desde abajo y suelta un hongo móvil. */
   skin?: string;
+}
+
+export interface PipeProps {
+  /** Id de esta boca (auto: P1, P2...). */
+  pid?: string;
+  /** Id de la boca destino. Sin target la tubería es decorado sólido. */
+  target?: string;
+  /** Ancho en tiles. Por defecto 2. */
+  w?: number;
+  /** Alto en tiles. Por defecto 2. */
+  h?: number;
 }
 
 export interface SpikesProps {
@@ -103,7 +115,7 @@ export interface SpikesProps {
 }
 
 export interface ExitProps {
-  /** Si true, abre solo con todos los items. Por defecto true. */
+  /** Legacy: si true pedía todas las gemas. Hoy la salida abre siempre. */
   needsAllItems?: boolean;
 }
 
@@ -111,7 +123,7 @@ export interface Entity {
   kind: EntityKind;
   x: number;
   y: number;
-  props?: WalkerProps | FlyerProps | SpikesProps | ExitProps | FruitProps | GemProps | PlatformProps | DecoProps | PowerupProps | PlayerProps | Record<string, unknown>;
+  props?: WalkerProps | FlyerProps | SpikesProps | ExitProps | FruitProps | GemProps | PlatformProps | DecoProps | PowerupProps | PipeProps | PlayerProps | Record<string, unknown>;
 }
 
 export interface Level {
