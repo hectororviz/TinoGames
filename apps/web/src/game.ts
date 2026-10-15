@@ -101,6 +101,16 @@ interface Pipe {
   bottom: number;
 }
 
+/** Rect sólido en px (piso, tuberías, bloques): pararse/crecer/respawn. */
+interface SolidRect {
+  l: number;
+  t: number;
+  r: number;
+  b: number;
+  /** Dueño (bloque/ladrillo): al romperse se quita el rect. */
+  tag?: object;
+}
+
 interface Faller {
   spr: Phaser.Physics.Arcade.Sprite;
   homeX: number;
@@ -139,6 +149,8 @@ export class GameScene extends Phaser.Scene {
   private startY = 0;
   private killY = 0;
   private solidSet: Set<string> = new Set();
+  /** Rects sólidos en px: tiles + tuberías + bloques ?/ladrillo. */
+  private solidRects: SolidRect[] = [];
   private walkers: Walker[] = [];
   private flyers: Flyer[] = [];
   private floaters: Floater[] = [];
@@ -226,6 +238,7 @@ export class GameScene extends Phaser.Scene {
       };
     }
     assertValidLevel(level);
+    this.solidRects = [];
     this.walkers = [];
     this.flyers = [];
     this.floaters = [];
@@ -267,6 +280,7 @@ export class GameScene extends Phaser.Scene {
         img.refreshBody();
         img.setDepth(-5);
         img.setData('key', tileKey('tile', t.x, t.y));
+        this.solidRects.push({ l: t.x * T, t: t.y * T, r: (t.x + 1) * T, b: (t.y + 1) * T });
       }
     }
     const worldW = (maxX + 3) * T;
@@ -325,6 +339,7 @@ export class GameScene extends Phaser.Scene {
           spr.refreshBody();
           spr.setData('broken', false);
           this.bricks.push(spr);
+          this.solidRects.push({ l: cx - 14, t: cy - 12, r: cx + 14, b: cy + 12, tag: spr });
           break;
         }
         case 'pipe': {
@@ -412,6 +427,7 @@ export class GameScene extends Phaser.Scene {
           spr.refreshBody();
           spr.setData('broken', false);
           this.blocks.push(spr);
+          this.solidRects.push({ l: cx - 14, t: cy - 12, r: cx + 14, b: cy + 12, tag: spr });
           break;
         }
         case 'platform': {
@@ -593,6 +609,7 @@ export class GameScene extends Phaser.Scene {
     const right = (tx + w) * T;
     const top = ty * T;
     const bottom = (ty + h) * T;
+    this.solidRects.push({ l: left, t: top, r: right, b: bottom });
     const mcx = (left + right) / 2;
     const mcy = (top + bottom) / 2;
     this.pipes.push({
@@ -753,15 +770,18 @@ export class GameScene extends Phaser.Scene {
   private respawn(): void {
     this.crouching = false;
     this.applyForm(false);
-    this.player.setPosition(this.startX, this.startY);
-    this.player.setVelocity(0, 0);
-    // Si el punto quedó dentro de sólido, subir hasta celda libre.
-    for (let i = 0; i < 6; i++) {
-      const tx = Math.floor(this.player.x / T);
-      const ty = Math.floor(this.player.y / T);
-      if (!this.solidSet.has(`${tx},${ty}`)) break;
-      this.player.y -= 8;
+    // Subir hasta el primer rect 12x14 libre (nunca nacer embebido).
+    const startFeet = this.startY + FEEL.smallH / 2;
+    let feet = startFeet;
+    for (let i = 0; i <= 160; i += 2) {
+      if (this.rectFree(this.startX, startFeet - i, FEEL.smallW, FEEL.smallH)) {
+        feet = startFeet - i;
+        break;
+      }
+      feet = startFeet - i;
     }
+    this.poseAtFeet(this.startX, feet);
+    this.player.setVelocity(0, 0);
     this.coyote = 0;
     this.buffer = 0;
     this.jumpCutArmed = false;
@@ -786,16 +806,20 @@ export class GameScene extends Phaser.Scene {
     this.player.setScale(scale);
   }
 
-  /** Fruta/hongo: agranda (o bonus si ya es grande). */
+  /** Fruta/hongo: agranda (o bonus si ya es grande). Sin techo, no crece. */
   private grow(): void {
     if (!this.big) {
-      const px = this.player.x;
-      const feetY = (this.player.body as Phaser.Physics.Arcade.Body).bottom;
+      const body = this.player.body as Phaser.Physics.Arcade.Body;
+      const feet = body.bottom;
+      if (!this.rectFree(this.player.x, feet, FEEL.bigW, FEEL.bigH, 0)) {
+        this.refreshHud();
+        this.showMsg('¡Sin lugar!');
+        return;
+      }
       this.setCrouch(false);
       this.applyForm(true);
-      // Replantar pies donde estaban para no quedar dentro del piso.
-      const nb = this.player.body as Phaser.Physics.Arcade.Body;
-      this.player.y += feetY - nb.bottom;
+      // Replantar pies donde estaban (colocación analítica, nunca embebido).
+      this.poseAtFeet(this.player.x, feet);
       this.refreshHud();
       this.showMsg('¡Grande!');
     } else {
@@ -814,6 +838,7 @@ export class GameScene extends Phaser.Scene {
     block.setData('broken', true);
     block.disableBody(true, true);
     this.blocks = this.blocks.filter((b) => b !== block);
+    this.dropSolidRect(block);
     this.spawnShroom(block.x, block.y - T);
     this.showMsg('¡Hongo!');
   }
@@ -829,6 +854,7 @@ export class GameScene extends Phaser.Scene {
       brick.setData('broken', true);
       brick.disableBody(true, true);
       this.bricks = this.bricks.filter((b) => b !== brick);
+      this.dropSolidRect(brick);
       this.showMsg('¡Roto!');
       return;
     }
@@ -910,22 +936,65 @@ export class GameScene extends Phaser.Scene {
     this.jumpCutArmed = false;
   }
 
-  /** Hay lugar para pararse grande (12x28 libres sobre los pies). */
-  private headroom(): boolean {
+  /** Quita el rect sólido de un bloque/ladrillo roto. */
+  private dropSolidRect(tag: object): void {
+    this.solidRects = this.solidRects.filter((s) => s.tag !== tag);
+  }
+
+  /** Coloca al jugador con los pies en `feet` (cálculo analítico + 1px de aire:
+   * Arcade ignora solapes mayores al delta del frame, así que embebido = fantasma).
+   * Usa body.reset: replantar solo el sprite deja prev obsoleto y el postUpdate
+   * catapulta al jugador con el delta fantasma. Preserva la velocidad. */
+  private poseAtFeet(x: number, feet: number): void {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
-    const feet = body.bottom;
-    const top = feet - FEEL.bigH;
-    const left = Math.floor((this.player.x - 6) / T);
-    const right = Math.floor((this.player.x + 6) / T);
-    for (let y = Math.floor(top / T); y <= Math.floor((feet - 1) / T); y++) {
-      for (let tx = left; tx <= right; tx++) {
-        if (this.solidSet.has(`${tx},${y}`)) return false;
-      }
+    const sc = this.player.scaleX;
+    const dispH = body.sourceHeight * Math.abs(sc);
+    const target = feet - 1 - (sc * (body.offset.y - 16) + dispH);
+    const vx = body.velocity.x;
+    const vy = body.velocity.y;
+    body.reset(x, target);
+    body.setVelocity(vx, vy);
+  }
+
+  /** Rect (centro-x, pies, w, h) libre de sólidos. e = margen interno. */
+  private rectFree(cx: number, feet: number, w: number, h: number, e = 0.6): boolean {
+    const l = cx - w / 2 + e;
+    const r = cx + w / 2 - e;
+    const t = feet - h + e;
+    const b = feet - e;
+    for (const s of this.solidRects) {
+      if (l < s.r && r > s.l && t < s.b && b > s.t) return false;
     }
     return true;
   }
 
-  /** Agacharse: cuerpo chico + sprite aplastado. Pararse exige techo libre. */
+  /** Red de seguridad: si el cuerpo solapa sólido, subir hasta quedar libre.
+   * Invariante: solape 0 (Arcade ignora lo embebido más allá del delta). */
+  private ejectUp(): void {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const sc = Math.abs(this.player.scaleX);
+    const w = body.sourceWidth * sc;
+    const h = body.sourceHeight * sc;
+    const feet = body.bottom;
+    if (this.rectFree(this.player.x, feet, w, h, 0)) return;
+    for (let i = 0; i < 48; i++) {
+      if (this.rectFree(this.player.x, feet - i, w, h, 0)) {
+        this.poseAtFeet(this.player.x, feet - i);
+        if (body.velocity.y > 0) this.player.setVelocityY(0);
+        return;
+      }
+    }
+    this.poseAtFeet(this.player.x, feet - 48);
+  }
+
+  /** Hay lugar para pararse grande (12x28 libres sobre los pies, estricto). */
+  private headroom(): boolean {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    return this.rectFree(this.player.x, body.bottom, FEEL.bigW, FEEL.bigH, 0);
+  }
+
+  /** Agacharse: cuerpo chico + sprite levemente más chico (escala uniforme).
+   * Pararse exige techo libre. Colocación analítica, nunca embebido. */
   private setCrouch(on: boolean): void {
     if (on === this.crouching) return;
     if (!on && this.big && !this.headroom()) return;
@@ -933,15 +1002,16 @@ export class GameScene extends Phaser.Scene {
     if (on) {
       const body = this.player.body as Phaser.Physics.Arcade.Body;
       const feet = body.bottom;
-      const s = this.big ? 0.9 : 0.55;
-      const w = FEEL.smallW / s;
-      const h = FEEL.smallH / s;
+      // Compensar la escala: el body escala con el sprite, así que se
+      // sobredimensiona para que el efectivo quede 12x14.
+      const sc = (this.big ? 0.9 : 0.55) * 0.85;
+      const w = FEEL.smallW / sc;
+      const h = FEEL.smallH / sc;
       this.player.setScale(1);
       body.setSize(w, h, false);
       body.setOffset((32 - w) / 2, 32 - h);
-      this.player.setScale(s, s * 0.8);
-      const nb = this.player.body as Phaser.Physics.Arcade.Body;
-      this.player.y += feet - nb.bottom;
+      this.player.setScale(sc);
+      this.poseAtFeet(this.player.x, feet);
     } else {
       this.applyForm(this.big);
     }
@@ -974,21 +1044,24 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       this.setCrouch(false);
-      const halfH = (this.big ? FEEL.bigH : FEEL.smallH) / 2 + 2;
-      const halfW = (this.big ? FEEL.bigW : FEEL.smallW) / 2 + 2;
+      const tb = this.player.body as Phaser.Physics.Arcade.Body;
+      const halfH = (tb.bottom - tb.top) / 2 + 2;
+      const halfW = (tb.right - tb.left) / 2 + 2;
       if (dest.dir === 'up') {
-        this.player.setPosition(dest.mouthX, dest.top - halfH);
+        this.poseAtFeet(dest.mouthX, dest.top - halfH);
         this.player.setVelocity(0, 0);
       } else if (dest.dir === 'down') {
-        this.player.setPosition(dest.mouthX, dest.bottom + halfH);
+        this.poseAtFeet(dest.mouthX, dest.bottom + halfH);
         this.player.setVelocity(0, 60);
       } else if (dest.dir === 'left') {
-        this.player.setPosition(dest.left - halfW, dest.mouthY);
+        this.poseAtFeet(dest.left - halfW, dest.mouthY + halfH);
         this.player.setVelocity(-60, 0);
       } else {
-        this.player.setPosition(dest.right + halfW, dest.mouthY);
+        this.poseAtFeet(dest.right + halfW, dest.mouthY + halfH);
         this.player.setVelocity(60, 0);
       }
+      // Pararse recién en destino (si hay techo, si no sigue agachado).
+      this.setCrouch(false);
       this.pipeCd = 1.0;
       this.showMsg('¡Warp!');
       return;
@@ -1055,9 +1128,10 @@ export class GameScene extends Phaser.Scene {
       this.buffer = FEEL.jumpBuffer;
     }
 
-    // Agacharse (↓): solo en piso; pararse exige techo libre si es grande.
+    // Agacharse (↓): solo en piso; pararse exige piso + techo libre.
+    // En aire se mantiene el estado hasta aterrizar.
     if (down && onFloor) this.setCrouch(true);
-    else this.setCrouch(false);
+    else if (onFloor) this.setCrouch(false);
     // Tubería: tecla hacia la boca.
     this.tryPipe(
       this.cursors.up.isDown || touchState.jump,
@@ -1274,6 +1348,9 @@ export class GameScene extends Phaser.Scene {
       this.player.setAlpha(0.35 + 0.3 * Math.abs(Math.sin(this.time.now / 60)));
       if (this.invuln <= 0) this.player.setAlpha(1);
     }
+
+    // Red de seguridad anti-hundimiento (esquinas, crecer, respawn).
+    this.ejectUp();
 
     // Caida al vacio.
     if (this.player.y > this.killY) this.respawn();
