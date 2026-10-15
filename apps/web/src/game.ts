@@ -582,7 +582,8 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.collider(w.spr, fallerSprites);
       this.physics.add.collider(w.spr, this.pipeSolids);
     }
-    this.physics.add.collider(this.player, items, (_p, obj) => {
+    // Items como sensor (overlap): agarrarlos no altera la velocidad del salto.
+    this.physics.add.overlap(this.player, items, (_p, obj) => {
       const go = obj as Phaser.GameObjects.GameObject;
       const isFruit = go.getData?.('fruit') === true;
       go.destroy();
@@ -609,7 +610,7 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBounds(0, topPx, worldW, worldH - topPx);
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
     this.hudGems = this.add.text(12, 8, '', { fontSize: '16px', color: '#ffffff', backgroundColor: '#141428aa', padding: { x: 6, y: 3 } }).setScrollFactor(0);
-    this.hudTime = this.add.text(12, 34, '0:00', { fontSize: '16px', color: '#ffffff', backgroundColor: '#141428aa', padding: { x: 6, y: 3 } }).setScrollFactor(0);
+    this.hudTime = this.add.text(468, 8, '0:00', { fontSize: '16px', color: '#ffffff', backgroundColor: '#141428aa', padding: { x: 6, y: 3 } }).setOrigin(1, 0).setScrollFactor(0);
     this.msg = this.add
       .text(240, 40, '', { fontSize: '16px', color: '#ffffff', backgroundColor: '#141428aa', padding: { x: 6, y: 3 }, align: 'center' })
       .setOrigin(0.5, 0)
