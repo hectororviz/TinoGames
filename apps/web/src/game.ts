@@ -166,6 +166,12 @@ export class GameScene extends Phaser.Scene {
   private startY = 0;
   private killY = 0;
   private solidSet: Set<string> = new Set();
+  /** Tiles flotantes delgados (sin sólido arriba ni abajo): semisólidos. */
+  private oneWayTiles: Set<string> = new Set();
+  /** El último aterrizaje en trampolín vino cayendo (hay que rebotar). */
+  private trampHot = false;
+  /** Histéresis del salto: evita que parpadee entre corto/largo al borde de walkMax. */
+  private lastRunJump = false;
   /** Rects sólidos en px: tiles + tuberías + bloques ?/ladrillo. */
   private solidRects: SolidRect[] = [];
   private walkers: Walker[] = [];
@@ -310,6 +316,17 @@ export class GameScene extends Phaser.Scene {
     this.solidSet = new Set(
       level.tiles.filter((t) => t.t === 'ground').map((t) => `${t.x},${t.y}`),
     );
+    // Semisólidos: piso flotante de 1 tile (aire arriba y abajo) se atraviesa
+    // desde abajo y se pisa desde arriba. Masas y columnas siguen sólidas.
+    this.oneWayTiles = new Set();
+    for (const key of this.solidSet) {
+      const [sx, sy] = key.split(',').map(Number);
+      if (!this.solidSet.has(`${sx},${sy - 1}`) && !this.solidSet.has(`${sx},${sy + 1}`)) {
+        this.oneWayTiles.add(tileKey('tile', sx, sy));
+      }
+    }
+    this.trampHot = false;
+    this.lastRunJump = false;
     let maxX = 0;
     let maxY = 0;
     for (const t of level.tiles) {
@@ -341,6 +358,7 @@ export class GameScene extends Phaser.Scene {
     const items = this.physics.add.staticGroup();
     const spikes = this.physics.add.staticGroup();
     const hazards = this.physics.add.staticGroup();
+    const tramps = this.physics.add.staticGroup();
     const checkpoints = this.physics.add.staticGroup();
     const blocks = this.physics.add.staticGroup();
     const bricks = this.physics.add.staticGroup();
@@ -455,7 +473,7 @@ export class GameScene extends Phaser.Scene {
           const variant = ((props['variant'] as string | undefined) ?? 'spikes') as string;
           for (let dx = 0; dx < w; dx++) {
             for (let dy = 0; dy < h; dy++) {
-              this.addHazard(hazards, spikes, variant, cx + dx * T, cy + dy * T);
+              this.addHazard(hazards, spikes, tramps, variant, cx + dx * T, cy + dy * T);
             }
           }
           break;
@@ -533,9 +551,15 @@ export class GameScene extends Phaser.Scene {
     const moverSprites = this.movers.map((m) => m.spr);
     const fallerSprites = this.fallers.map((f) => f.spr);
     const blockSprites = this.blocks;
-    this.physics.add.collider(this.player, solids);
-    this.physics.add.collider(this.player, moverSprites);
-    this.physics.add.collider(this.player, fallerSprites);
+    this.physics.add.collider(this.player, solids, undefined, (_p, obj) => this.tileOneWay(_p, obj));
+    this.physics.add.collider(this.player, moverSprites, undefined, (_p, obj) => this.riseThrough(_p, obj));
+    this.physics.add.collider(this.player, fallerSprites, undefined, (_p, obj) => this.riseThrough(_p, obj));
+    this.physics.add.collider(this.player, tramps, (_p, obj) => {
+      if (this.trampHot) {
+        this.trampHot = false;
+        this.bounce(obj as Phaser.GameObjects.GameObject);
+      }
+    }, (_p, obj) => this.trampProcess(_p, obj));
     this.physics.add.collider(this.player, this.pipeSolids);
     this.physics.add.collider(this.player, blockSprites, (_p, obj) => {
       this.hitBlock(obj as Phaser.Physics.Arcade.Image);
@@ -563,14 +587,7 @@ export class GameScene extends Phaser.Scene {
     });
     // La salida abre siempre (las monedas son puntaje).
     this.physics.add.overlap(this.player, spikes, () => this.damage());
-    this.physics.add.overlap(this.player, hazards, (_p, obj) => {
-      const go = obj as Phaser.GameObjects.GameObject;
-      if (go.getData?.('trampoline') === true) {
-        this.bounce(go);
-        return;
-      }
-      this.damage();
-    });
+    this.physics.add.overlap(this.player, hazards, () => this.damage());
     for (const w of this.walkers) this.physics.add.overlap(this.player, w.spr, () => this.hitEnemy(w.spr));
     for (const f of this.flyers) this.physics.add.overlap(this.player, f.spr, () => this.hitEnemy(f.spr));
     // Rocas caedoras: siempre dañan (ni pisotón las mata).
@@ -681,6 +698,7 @@ export class GameScene extends Phaser.Scene {
   private addHazard(
     hazards: Phaser.GameObjects.Group,
     spikes: Phaser.GameObjects.Group,
+    tramps: Phaser.GameObjects.Group,
     variant: string,
     x: number,
     y: number,
@@ -697,7 +715,8 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (variant === 'trampoline') {
-      const spr = hazards.create(x, y + 2, TRAMP_IDLE.key) as Phaser.Physics.Arcade.Image;
+      // Grupo propio con rebote solo al aterrizar (ya no overlap fantasma).
+      const spr = tramps.create(x, y + 2, TRAMP_IDLE.key) as Phaser.Physics.Arcade.Image;
       spr.refreshBody();
       (spr.body as Phaser.Physics.Arcade.Body).setSize(24, 12);
       spr.setData('trampoline', true);
@@ -1146,6 +1165,42 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Semisólido estilo Maker: se atraviesa subiendo desde abajo, se pisa cayendo.
+   * Quieto o cayendo colisiona siempre (pararse, caminar, aterrizar). */
+  private riseThrough(p: object, o: object): boolean {
+    const pb = (p as unknown as { body: Phaser.Physics.Arcade.Body }).body;
+    const qb = (o as unknown as { body: Phaser.Physics.Arcade.Body }).body;
+    if (!pb || !qb) return true;
+    if (pb.velocity.y < -20 && pb.top > qb.top) return false;
+    return true;
+  }
+
+  /** Solo los tiles flotantes delgados son semisólidos; el resto es macizo. */
+  private tileOneWay(p: object, o: object): boolean {
+    const key = (o as unknown as { getData?: (k: string) => unknown }).getData?.('key');
+    if (typeof key !== 'string' || !this.oneWayTiles.has(key)) return true;
+    return this.riseThrough(p, o);
+  }
+
+  /** Trampolín: solo rebota al aterrizar encima; de costado o desde abajo pasa. */
+  private trampProcess(p: object, o: object): boolean {
+    const pb = (p as unknown as { body: Phaser.Physics.Arcade.Body }).body;
+    const qb = (o as unknown as { body: Phaser.Physics.Arcade.Body }).body;
+    if (!pb || !qb) return false;
+    const pen = pb.bottom - qb.top;
+    if (pb.velocity.y < -20 && pb.top > qb.top) {
+      this.trampHot = false;
+      return false;
+    }
+    if (pb.velocity.y > 40 && pen < 14) {
+      this.trampHot = true;
+      return true;
+    }
+    // Quieto encima: sostener sin rebotar (el rebote lo dispara trampHot).
+    if (Math.abs(pb.velocity.y) <= 40 && pen <= 4 && pen >= -6) return true;
+    return false;
+  }
+
   private standingOn(plat: Phaser.Physics.Arcade.Sprite): boolean {
     const pb = this.player.body as Phaser.Physics.Arcade.Body;
     const qb = plat.body as Phaser.Physics.Arcade.Body;
@@ -1260,8 +1315,11 @@ export class GameScene extends Phaser.Scene {
     }
     this.buffer -= delta;
     if (this.buffer > 0 && (this.coyote > 0 || onFloor)) {
-      // ST: salto más alto solo si corrés (supera MAX_WALK), no interpolado.
-      const jumpVel = Math.abs(body.velocity.x) > FEEL.walkMax ? FEEL.jumpVelRun : FEEL.jumpVelWalk;
+      // ST por umbral, con histéresis ±8 para no parpadear entre corto/largo.
+      const sp = Math.abs(body.velocity.x);
+      if (sp > FEEL.walkMax + 8) this.lastRunJump = true;
+      else if (sp < FEEL.walkMax - 8) this.lastRunJump = false;
+      const jumpVel = this.lastRunJump ? FEEL.jumpVelRun : FEEL.jumpVelWalk;
       this.player.setVelocityY(-jumpVel);
       this.buffer = 0;
       this.coyote = 0;

@@ -75,8 +75,9 @@ producción: sin él la API usa secreto de desarrollo).
   la boca; herramienta 🔗 para vincular 2 a elección, auto-enlace al pintar).
   Agacharse con ↓ (techo libre para pararse grande).
   Checkpoint: último tocado. Plataformas: móviles + que caen.
-- Física SMB (`apps/web/src/feel.ts`): walk 95 / run 165 (B), acel/derrape,
-  salto variable 300→360 (gravedad 650/1150 + corte), coyote 0.10s,
-  buffer 0.12s, pisotón 210/340. Chico 12×14 (1 tile), grande 12×28.
+- Física SuperTux (`apps/web/src/feel.ts`, GPL): walk 115 / run 160 (B),
+  acel/derrape ST, salto 260→290 por umbral con histéresis,
+  coyote 0.10s, buffer 0.25s, pisotón 210/340. Chico 14×15 (1 tile),
+  grande 14×30. Pisos flotantes delgados y plataformas: semisólidos.
 - Sin app nativa: PWA/Capacitor. JSON v2 disperso, sin techo, versionado.
   Niveles viejos (dash/doble/disparo/3HP) no se mantienen: se borran.

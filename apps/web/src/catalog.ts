@@ -211,7 +211,7 @@ export const ENEMIES: EnemySkin[] = [
   foe('plant', 'Planta', 'walker', 'foe-plant', enPlant, 44, 42, 11, 36, 36, { speed: 0, range: 0 }),
   foe('bat', 'Murciélago', 'flyer', 'foe-bat', enBat, 46, 30, 7, 40, 24),
   foe('bee', 'Abeja', 'flyer', 'foe-bee', enBee, 36, 34, 6, 30, 28),
-  foe('bluebird', 'Pájaro', 'flyer', 'foe-bluebird', bluebirdUrl, 32, 32, 9, 26, 26),
+  foe('bluebird', 'Pájaro', 'flyer', 'foe-bluebird', bluebirdUrl, 32, 32, 9, 26, 26, { face: 'left' }),
   foe('ghost', 'Fantasma', 'flyer', 'foe-ghost', enGhost, 44, 30, 10, 38, 24),
   foe('skull', 'Calavera', 'flyer', 'foe-skull', enSkull, 52, 54, 8, 44, 46),
 ];

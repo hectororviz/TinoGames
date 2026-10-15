@@ -9,13 +9,16 @@
 - Server: **Fastify + Postgres**, Docker, dominios vía **caddy-docker-proxy**
   (labels por env, dominios al desplegar).
 - Nivel como dato puro: JSON v2 versionado y disperso; el tema resuelve sprites.
-- Sprites 100% propios/CC0 (nada de Nintendo, ni siquiera "parecidos").
+- Sprites base CC0 + **Tux de SuperTux (GPLv3)** como personaje default
+  (créditos en `assets/CREDITS_SUPERTUX.md`; nada de Nintendo).
 
 ## Mecánicas SMB con sprites propios (no reabrir)
 
-- Física (`apps/web/src/feel.ts`): walk 95, run 165 (B = Shift/J/táctil),
-  acel 380, derrape 700, salto variable 300→360 (gravedad 650/1150 + corte
-  110), coyote 0.10s, buffer 0.12s, pisotón 210 (suelto) / 340 (manteniendo).
+- Física SuperTux (`apps/web/src/feel.ts`, GPL): walk 115, run 160
+  (B = Shift/J/táctil), acel 150/200, fricción x1.5, derrape 300/375,
+  arranque instantáneo 50, salto 260→290 por umbral con histéresis
+  (gravedad 500/1500 apex x3), coyote 0.10s, buffer 0.25s,
+  pisotón 210 (suelto) / 340 (manteniendo).
 - Chico 12×14 (1 tile) ↔ grande 12×28 vía fruta fija o hongo móvil del
   bloque `?` (hay que atraparlo). Grande→chico con 2s invuln, chico→muerte.
   Sin doble-salto, sin dash, sin disparo, sin corazones, sin knockback.
@@ -27,8 +30,12 @@
   verificado libre o se cancela el viaje. Salida con empujón hacia afuera.
 - Sin toasts de gameplay: solo mensaje de victoria. Estado en HUD
   (🪙 contador, 🍄 solo si grande).
-- Checkpoint: último tocado. Plataformas: móviles H/V (arrastre exacto) +
-  las que caen. Mundo y cámara con 3 tiles de aire sobre lo más alto
+- Plataformas móviles/caedizas y pisos flotantes de 1 tile: **semisólidos**
+  (se atraviesan subiendo, se pisan cayendo). Masas, columnas, bloques,
+  ladrillos y tuberías siguen macizos (cabezazo).
+- Trampolín: grupo propio, rebota solo al aterrizar encima; de costado pasa.
+- Checkpoint: último tocado. Plataformas móviles H/V con arrastre exacto.
+  Mundo y cámara con 3 tiles de aire sobre lo más alto
   (sin techo invisible en y=0).
 
 ## Editor web (no reabrir)
