@@ -600,7 +600,8 @@ export class EditorScene extends Phaser.Scene {
     this.ghost.setPosition(tileX * T + T / 2, tileY * T + T / 2);
     this.ghost.setVisible(true);
   }
-  /** Redibuja la grid solo sobre el rectángulo visible (cubre bordes con zoom/pan). */
+  /** Redibuja la grid solo sobre el rectángulo visible (cubre bordes con zoom/pan).
+   * Ancho 1/zoom: siempre 1px en pantalla, ni se pierde ni se engrosa. */
   private drawGrid(): void {
     if (!this.gridGraphics) return;
     const cam = this.cameras.main;
@@ -610,12 +611,12 @@ export class EditorScene extends Phaser.Scene {
     const top = Math.floor(cam.scrollY / T) * T - T;
     const right = Math.ceil(cam.scrollX + viewW) + T;
     const bottom = Math.ceil(cam.scrollY + viewH) + T;
-    const key = `${left},${top},${right},${bottom}`;
+    const key = `${left},${top},${right},${bottom},${cam.zoom.toFixed(3)}`;
     if (key === this.lastGridKey) return;
     this.lastGridKey = key;
     const g = this.gridGraphics;
     g.clear();
-    g.lineStyle(1, 0x444466, 0.6);
+    g.lineStyle(1 / cam.zoom, 0x444466, 0.6);
     for (let x = left; x <= right; x += T) g.lineBetween(x, top, x, bottom);
     for (let y = top; y <= bottom; y += T) g.lineBetween(left, y, right, y);
   }
@@ -1392,13 +1393,46 @@ export class EditorScene extends Phaser.Scene {
     node.classList.toggle('err', !ok);
   }
 
+  /** Lleva la cámara al tile y lo resalta un momento. */
+  private gotoTile(x: number, y: number): void {
+    this.cameras.main.centerOn(x * T + T / 2, y * T + T / 2);
+    this.hoverX = x;
+    this.hoverY = y;
+    this.updateCoords(x, y);
+    this.flashStatus(`celda ${x},${y}`, true);
+  }
+
   private updateStatus(): void {
     const errors = validateLevel(this.level);
+    const node = el('ed-status');
+    node.textContent = '';
     if (errors.length === 0) {
       this.setStatus('Nivel válido', true);
-    } else {
-      this.setStatus(errors.map((e) => e.message).join(' · '), false);
+      return;
     }
+    node.classList.toggle('ok', false);
+    node.classList.toggle('err', true);
+    errors.forEach((e, i) => {
+      if (i > 0) node.append(' · ');
+      const m = /\((-?\d+),\s*(-?\d+)\)/.exec(e.message);
+      if (!m) {
+        node.append(e.message);
+        return;
+      }
+      const [full, sx, sy] = m;
+      const idx = e.message.indexOf(full);
+      node.append(e.message.slice(0, idx));
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ed-errlink';
+      btn.textContent = full;
+      btn.title = `Ir a la celda ${sx},${sy}`;
+      const tx = Number(sx);
+      const ty = Number(sy);
+      btn.onclick = () => this.gotoTile(tx, ty);
+      node.appendChild(btn);
+      node.append(e.message.slice(idx + full.length));
+    });
   }
 
   private flashStatus(message: string, ok: boolean): void {
@@ -1508,25 +1542,17 @@ export class EditorScene extends Phaser.Scene {
         this.paintAt(pointer);
         return;
       }
+      // Paneo solo en modo pan (mano/espacio/botón central). Con el resto,
+      // arrastrar pinta el trazo (izquierdo) sin cambiar a paneo.
       const panMode = this.tool === 'hand' || this.spaceDown || pointer.middleButtonDown();
       if (panMode) {
         this.panBy(pointer.x - this.downX, pointer.y - this.downY);
         this.downX = pointer.x;
         this.downY = pointer.y;
+        this.panning = true;
         return;
       }
-      if (!this.panning) {
-        const dx = pointer.x - this.downX;
-        const dy = pointer.y - this.downY;
-        if (Math.hypot(dx, dy) > DRAG_THRESHOLD) this.panning = true;
-      }
-      if (this.panning) {
-        this.panBy(pointer.x - this.downX, pointer.y - this.downY);
-        this.downX = pointer.x;
-        this.downY = pointer.y;
-      } else {
-        this.paintAt(pointer);
-      }
+      this.paintAt(pointer);
     });
 
     const stop = (pointer: Phaser.Input.Pointer): void => {
@@ -1557,14 +1583,22 @@ export class EditorScene extends Phaser.Scene {
         _gameObjects: unknown[],
         _deltaX: number,
         deltaY: number,
+        _deltaZ: number,
       ) => {
         const cam = this.cameras.main;
-        const before = cam.getWorldPoint(pointer.x, pointer.y);
-        const next = Phaser.Math.Clamp(cam.zoom - deltaY * 0.001, 0.25, 4);
-        cam.setZoom(next);
-        const after = cam.getWorldPoint(pointer.x, pointer.y);
-        cam.scrollX += before.x - after.x;
-        cam.scrollY += before.y - after.y;
+        const ev = (pointer.event ?? {}) as { ctrlKey?: boolean; shiftKey?: boolean };
+        // Rueda mueve el canvas (Shift = horizontal); Ctrl+rueda = zoom.
+        if (ev.ctrlKey) {
+          const before = cam.getWorldPoint(pointer.x, pointer.y);
+          const next = Phaser.Math.Clamp(cam.zoom - deltaY * 0.001, 0.25, 4);
+          cam.setZoom(next);
+          const after = cam.getWorldPoint(pointer.x, pointer.y);
+          cam.scrollX += before.x - after.x;
+          cam.scrollY += before.y - after.y;
+          return;
+        }
+        if (ev.shiftKey) cam.scrollX += deltaY / cam.zoom;
+        else cam.scrollY += deltaY / cam.zoom;
       },
     );
 
@@ -1632,6 +1666,7 @@ export class EditorScene extends Phaser.Scene {
     const key = `${this.tool}:${tileX},${tileY}`;
     if (key === this.lastPaintKey) return;
     this.lastPaintKey = key;
+    this.updateCoords(tileX, tileY);
 
     if (this.tool === 'erase') {
       this.eraseAt(tileX, tileY);

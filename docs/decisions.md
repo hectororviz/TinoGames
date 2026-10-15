@@ -41,6 +41,11 @@
   pares; borrar rompe el enlace; `target` a pid inexistente = error.
 - Inspector (mano + clic): eje/rango/velocidad de plataformas, rango/velocidad
   de enemigos, w/h de pinchos y tuberías, dir de boca, skins y colores.
+- Entrada: izquierdo pinta (clic o trazo corrido), derecho borra (clic o
+  trazo), rueda mueve el canvas (Shift horizontal, Ctrl zoom), mano/espacio/
+  botón central panean. Grilla de 1px en pantalla a todo zoom. Errores con
+  coordenadas clickeables que llevan la cámara al tile; lector de celda
+  siempre visible en la barra.
 - Canvas: fondo del bioma en vivo + velo, grilla, guía de vista 480×270,
   caja del nivel, techo y=0, línea de muerte, recorridos de plataformas,
   huellas reales, etiquetas de tubería y selección.
