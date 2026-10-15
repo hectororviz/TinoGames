@@ -215,6 +215,27 @@ export class GameScene extends Phaser.Scene {
     this.load.image(BG_BLUE.key, BG_BLUE.url);
   }
 
+  /** Textura 64px de plataforma con frame 0 repetido (el tileSprite sobre el
+   * spritesheet muestra frames distintos pegados). */
+  private makePlatTextures(): void {
+    const defs = [
+      { key: 'plat-mover64', src: PLATFORMS.mover.key, w: 64, h: 8 },
+      { key: 'plat-faller64', src: PLATFORMS.faller.key, w: 64, h: 10 },
+    ];
+    for (const d of defs) {
+      if (this.textures.exists(d.key)) continue;
+      const strip = this.textures.get(d.src).getSourceImage() as CanvasImageSource;
+      const cv = this.textures.createCanvas(d.key, d.w, d.h);
+      if (!cv) continue;
+      const ctx = cv.getContext();
+      ctx.clearRect(0, 0, d.w, d.h);
+      const sw = d.w / 2;
+      const sh = d.h;
+      ctx.drawImage(strip, 0, 0, sw, sh, 0, 0, sw, sh);
+      ctx.drawImage(strip, 0, 0, sw, sh, sw, 0, sw, sh);
+      cv.refresh();
+    }
+  }
   private currentLevel!: Level;
   private fromEditor = false;
   private remoteId: string | undefined;
@@ -245,6 +266,7 @@ export class GameScene extends Phaser.Scene {
       };
     }
     assertValidLevel(level);
+    this.makePlatTextures();
     this.solidRects = [];
     this.walkers = [];
     this.flyers = [];
@@ -448,23 +470,21 @@ export class GameScene extends Phaser.Scene {
         case 'platform': {
           const axis = (props['axis'] as string | undefined) ?? 'x';
           if (axis === 'fall') {
-            const spr = this.add.tileSprite(cx, cy, 64, 10, PLATFORMS.faller.key);
-            this.physics.add.existing(spr);
+            const spr = this.physics.add.sprite(cx, cy, 'plat-faller64');
             const b = spr.body as Phaser.Physics.Arcade.Body;
             b.setAllowGravity(false);
             b.setImmovable(true);
             b.setSize(64, 10);
-            this.fallers.push({ spr: spr as unknown as Phaser.Physics.Arcade.Sprite, homeX: cx, homeY: cy, state: 'idle', timer: 0, jitter: Math.random() * 10 });
+            this.fallers.push({ spr, homeX: cx, homeY: cy, state: 'idle', timer: 0, jitter: Math.random() * 10 });
           } else {
-            // Mosaico 2×32px: pixel-perfect, sin estirar.
-            const spr = this.add.tileSprite(cx, cy, 64, 8, PLATFORMS.mover.key);
-            this.physics.add.existing(spr);
+            // Textura 64px de frame único: sin estirar ni mezclar frames.
+            const spr = this.physics.add.sprite(cx, cy, 'plat-mover64');
             const b = spr.body as Phaser.Physics.Arcade.Body;
             b.setAllowGravity(false);
             b.setImmovable(true);
             b.setSize(64, 8);
             this.movers.push({
-              spr: spr as unknown as Phaser.Physics.Arcade.Sprite,
+              spr,
               homeX: cx,
               homeY: cy,
               axis: axis === 'y' ? 'y' : 'x',
@@ -1047,21 +1067,45 @@ export class GameScene extends Phaser.Scene {
       if (!dest) return;
       this.setCrouch(false);
       const tb = this.player.body as Phaser.Physics.Arcade.Body;
-      const halfH = (tb.bottom - tb.top) / 2 + 2;
-      const halfW = (tb.right - tb.left) / 2 + 2;
+      const bw = tb.right - tb.left;
+      const bh = tb.bottom - tb.top;
+      // Punto de salida + escaneo hacia afuera hasta 48px: si no hay lugar
+      // libre, se cancela el viaje (nunca se atraviesa nada).
+      let ex = dest.mouthX;
+      let feet = dest.top;
+      let vx = 0;
+      let vy = 0;
       if (dest.dir === 'up') {
-        this.poseAtFeet(dest.mouthX, dest.top - halfH);
-        this.player.setVelocity(0, 0);
+        feet = dest.top - bh / 2 - 2;
       } else if (dest.dir === 'down') {
-        this.poseAtFeet(dest.mouthX, dest.bottom + halfH);
-        this.player.setVelocity(0, 60);
+        feet = dest.bottom + bh / 2 + 2;
+        vy = 60;
       } else if (dest.dir === 'left') {
-        this.poseAtFeet(dest.left - halfW, dest.mouthY + halfH);
-        this.player.setVelocity(-60, 0);
+        ex = dest.left - bw / 2 - 2;
+        feet = dest.mouthY + bh / 2;
+        vx = -60;
       } else {
-        this.poseAtFeet(dest.right + halfW, dest.mouthY + halfH);
-        this.player.setVelocity(60, 0);
+        ex = dest.right + bw / 2 + 2;
+        feet = dest.mouthY + bh / 2;
+        vx = 60;
       }
+      let ok = false;
+      for (let i = 0; i <= 48; i += 8) {
+        const fx = dest.dir === 'left' ? ex - i : dest.dir === 'right' ? ex + i : ex;
+        const ff = dest.dir === 'up' ? feet - i : dest.dir === 'down' ? feet + i : feet;
+        if (this.rectFree(fx, ff, bw, bh, 0)) {
+          ex = fx;
+          feet = ff;
+          ok = true;
+          break;
+        }
+      }
+      if (!ok) {
+        this.pipeCd = 0.3;
+        return;
+      }
+      this.poseAtFeet(ex, feet);
+      this.player.setVelocity(vx, vy);
       // Pararse recién en destino (si hay techo, si no sigue agachado).
       this.setCrouch(false);
       this.pipeCd = 1.0;
