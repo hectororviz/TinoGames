@@ -1,0 +1,11 @@
+{
+    "schema_version": 2,
+    "commit": "dc8fa6c363f86a0e60a0a16857545f75d019ef66",
+    "indexed_at": "2026-10-15T13:09:47Z",
+    "project": "home-ubuntu-tinogames",
+    "nodes": 525,
+    "edges": 1445,
+    "original_size": 4063232,
+    "compressed_size": 742214,
+    "compression_level": 3
+}

@@ -31,8 +31,23 @@ describe('validateLevel', () => {
       { kind: 'deco', x: ground.x, y: ground.y - 1 },
       { kind: 'brick', x: ground.x, y: ground.y - 5 },
       { kind: 'pipe', x: 40, y: 1, props: { w: 2, h: 2, pid: 'P9', target: 'P1' } },
+      { kind: 'pipe', x: 44, y: 1, props: { w: 2, h: 2, pid: 'P10', dir: 'left' } },
     );
     expect(validateLevel(level)).toEqual([]);
+  });
+
+  it('rejects a pipe with a bad dir', () => {
+    const level = loadSample();
+    level.entities.push({ kind: 'pipe', x: 40, y: 1, props: { dir: 'diagonal' } });
+    const codes = validateLevel(level).map((e) => e.code);
+    expect(codes).toContain('pipe-dir');
+  });
+
+  it('rejects a pipe targeting a missing pid', () => {
+    const level = loadSample();
+    level.entities.push({ kind: 'pipe', x: 40, y: 1, props: { pid: 'P9', target: 'P99' } });
+    const codes = validateLevel(level).map((e) => e.code);
+    expect(codes).toContain('pipe-link');
   });
 
   it('rejects a pipe footprint inside solid ground', () => {

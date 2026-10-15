@@ -103,6 +103,8 @@ export interface PipeProps {
   w?: number;
   /** Alto en tiles. Por defecto 2. */
   h?: number;
+  /** Lado de la boca: 'up' | 'down' | 'left' | 'right'. Por defecto 'up'. */
+  dir?: string;
 }
 
 export interface SpikesProps {

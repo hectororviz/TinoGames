@@ -27,8 +27,9 @@ function solidAt(solids: Set<string>, x: number, y: number): boolean {
  *   Solo exigen no estar en solido. 'item' legacy se trata como fruta.
  * - brick (ladrillo): se cabecea desde abajo; chico rebota, grande rompe.
  *   Solo exige no estar en solido.
- * - pipe (tubería w×h, por defecto 2×2, sólida): la huella no puede estar
- *   en sólido; el target es solo un id (puede colgar, en juego no viaja).
+ * - pipe (tubería w×h, por defecto 2×2, sólida, boca del lado `dir`):
+ *   la huella no puede estar en solido; `target` vacío = tapada (válido);
+ *   `target` a un pid inexistente = error `pipe-link`.
  */
 export function validateLevel(level: Level): ValidationError[] {
   const errors: ValidationError[] = [];
@@ -142,12 +143,28 @@ export function validateLevel(level: Level): ValidationError[] {
       case 'pipe': {
         const w = Math.max(1, Math.floor((e.props as { w?: number } | undefined)?.w ?? 2));
         const h = Math.max(1, Math.floor((e.props as { h?: number } | undefined)?.h ?? 2));
+        const dir = (e.props as { dir?: unknown } | undefined)?.dir ?? 'up';
+        if (dir !== 'up' && dir !== 'down' && dir !== 'left' && dir !== 'right') {
+          fail('pipe-dir', `bad pipe dir: ${JSON.stringify(dir)}`);
+          break;
+        }
         for (let dx = 0; dx < w; dx++) {
           for (let dy = 0; dy < h; dy++) {
             if (solidAt(solids, e.x + dx, e.y + dy)) {
               fail('inside-solid', `pipe at (${e.x},${e.y}) is inside solid`);
               break;
             }
+          }
+        }
+        const target = (e.props as { target?: unknown } | undefined)?.target;
+        if (typeof target === 'string' && target) {
+          const pids = new Set(
+            level.entities
+              .filter((o) => o.kind === 'pipe')
+              .map((o) => (o.props as { pid?: unknown } | undefined)?.pid),
+          );
+          if (!pids.has(target)) {
+            fail('pipe-link', `pipe at (${e.x},${e.y}) targets missing ${target}`);
           }
         }
         break;

@@ -67,7 +67,8 @@ producción: sin él la API usa secreto de desarrollo).
 - Fruta/bloque `?`: el bloque suelta hongo móvil (hay que atraparlo).
   Grande→chico con 2s invuln, chico→muerte. Monedas: solo puntaje
   (🪙, morada/azul/roja); la salida abre siempre. Ladrillos: chico rebota,
-  grande rompe. Tuberías warp 2×2 con ↓ (auto-enlazadas P1↔P2 en el editor).
+  grande rompe. Tuberías warp 2×2 con boca en 4 lados (↑↓←→, tecla hacia
+  la boca; herramienta 🔗 para vincular 2 a elección, auto-enlace al pintar).
   Agacharse con ↓ (techo libre para pararse grande).
   Checkpoint: último tocado. Plataformas: móviles + que caen.
 - Física SMB (`apps/web/src/feel.ts`): walk 95 / run 165 (B), acel/derrape,

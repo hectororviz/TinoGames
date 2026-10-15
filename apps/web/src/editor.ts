@@ -46,6 +46,7 @@ type Tool =
   | 'powerup'
   | 'brick'
   | 'pipe'
+  | 'link'
   | 'exit'
   | 'erase'
   | 'hand';
@@ -73,6 +74,8 @@ export class EditorScene extends Phaser.Scene {
   private platformAxis = 'x';
   private obstacle = 'spikes';
   private powerSkin = 'box1';
+  private pipeDir = 'up';
+  private linkFirst: Entity | null = null;
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private guideGraphics!: Phaser.GameObjects.Graphics;
   private boundsGraphics!: Phaser.GameObjects.Graphics;
@@ -483,17 +486,37 @@ export class EditorScene extends Phaser.Scene {
       const cx = entity.x * T + T / 2;
       const cy = entity.y * T + T / 2;
       if (entity.kind === 'pipe') {
-        // Huella w×h: boca arriba, cuerpo debajo.
-        const w = Math.max(1, Math.floor(((entity.props as { w?: number } | undefined)?.w) ?? 2));
-        const h = Math.max(1, Math.floor(((entity.props as { h?: number } | undefined)?.h) ?? 2));
+        // Huella w×h: boca (rim) del lado dir, cuerpo en el resto.
+        const pr = (entity.props ?? {}) as { w?: unknown; h?: unknown; dir?: unknown };
+        const w = Math.max(1, Math.floor(typeof pr.w === 'number' ? pr.w : 2));
+        const h = Math.max(1, Math.floor(typeof pr.h === 'number' ? pr.h : 2));
+        const dir = pr.dir === 'down' || pr.dir === 'left' || pr.dir === 'right' ? pr.dir : 'up';
         for (let dx = 0; dx < w; dx++) {
           for (let dy = 0; dy < h; dy++) {
-            const tex = dy === 0 ? PIPE.rim.key : PIPE.body.key;
+            const rim =
+              dir === 'up' ? dy === 0
+              : dir === 'down' ? dy === h - 1
+              : dir === 'left' ? dx === 0
+              : dx === w - 1;
+            const tex = rim ? PIPE.rim.key : PIPE.body.key;
             const sprite = this.add.image((entity.x + dx) * T, (entity.y + dy) * T, tex);
             sprite.setOrigin(0, 0);
             this.sprites.push(sprite);
           }
         }
+        const pid = typeof (entity.props as { pid?: unknown } | undefined)?.pid === 'string'
+          ? ((entity.props as { pid?: string }).pid as string)
+          : '';
+        const target = typeof (entity.props as { target?: unknown } | undefined)?.target === 'string'
+          ? ((entity.props as { target?: string }).target as string)
+          : '';
+        const label = this.add
+          .text(entity.x * T + (w * T) / 2, entity.y * T + 8, pid || '?', {
+            fontSize: '10px',
+            color: target ? '#7de0a8' : '#ff8888',
+          })
+          .setOrigin(0.5, 0);
+        this.sprites.push(label);
         continue;
       }
       const p = this.preview(entity.kind, entity.props as Record<string, unknown> | undefined);
@@ -526,6 +549,33 @@ export class EditorScene extends Phaser.Scene {
     const killY = (b.maxY + 3) * T;
     g.lineStyle(2, 0xff4444, 0.8);
     g.lineBetween(x0 - T, killY, x1 + T, killY);
+
+    // Enlaces de tuberías: línea entre bocas vinculadas.
+    const pipes = this.level.entities.filter((e) => e.kind === 'pipe');
+    const centerOf = (e: Entity): [number, number] => {
+      const pr = (e.props ?? {}) as { w?: unknown; h?: unknown };
+      const w = Math.max(1, Math.floor(typeof pr.w === 'number' ? pr.w : 2));
+      const h = Math.max(1, Math.floor(typeof pr.h === 'number' ? pr.h : 2));
+      return [e.x * T + (w * T) / 2, e.y * T + (h * T) / 2];
+    };
+    g.lineStyle(2, 0x7de0a8, 0.7);
+    for (const e of pipes) {
+      const target = (e.props as { target?: unknown } | undefined)?.target;
+      if (typeof target !== 'string' || !target) continue;
+      const dest = pipes.find(
+        (o) => (o.props as { pid?: unknown } | undefined)?.pid === target,
+      );
+      if (!dest) continue;
+      const [ax, ay] = centerOf(e);
+      const [bx, by] = centerOf(dest);
+      g.lineBetween(ax, ay, bx, by);
+    }
+    // Origen pendiente del enlazador.
+    if (this.linkFirst && pipes.includes(this.linkFirst)) {
+      const [lx, ly] = centerOf(this.linkFirst);
+      g.lineStyle(2, 0xffffff, 0.9);
+      g.strokeCircle(lx, ly, T);
+    }
   }
 
   private bindUi(): void {
@@ -848,9 +898,18 @@ export class EditorScene extends Phaser.Scene {
     this.fopt(grid, 'Ladrillo', this.sheetThumb(BRICK.url, BRICK.w, BRICK.h, 1), () => {
       this.tool = 'brick';
     });
-    this.fopt(grid, 'Tubería 2×2', this.sheetThumb(PIPE.rim.url, 16, 16, 1), () => {
-      this.tool = 'pipe';
-    });
+    const pipeDirs = [
+      ['up', 'Tubería ↑'],
+      ['down', 'Tubería ↓'],
+      ['left', 'Tubería ←'],
+      ['right', 'Tubería →'],
+    ] as const;
+    for (const [dir, label] of pipeDirs) {
+      this.fopt(grid, label, this.sheetThumb(PIPE.rim.url, 16, 16, 1), () => {
+        this.pipeDir = dir;
+        this.tool = 'pipe';
+      });
+    }
     this.fopt(grid, 'Salida', this.sheetThumb(EXIT_DOOR.idle.url, 64, 64, 1), () => {
       this.tool = 'exit';
     });
@@ -930,12 +989,17 @@ export class EditorScene extends Phaser.Scene {
       case 'spikes': return (OBSTACLES.find((o) => o.id === this.obstacle) ?? OBSTACLES[0]).label;
       case 'powerup': return (POWERUPS.find((d) => d.id === this.powerSkin) ?? POWERUPS[0]).label;
       case 'brick': return 'Ladrillo';
-      case 'pipe': return 'Tubería';
+      case 'pipe': return `Tubería ${this.pipeDirArrow()}`;
+      case 'link': return 'Enlazar';
       case 'exit': return 'Salida';
       case 'erase': return 'Borrar';
       case 'hand': return 'Mano';
       default: return '—';
     }
+  }
+
+  private pipeDirArrow(): string {
+    return this.pipeDir === 'down' ? '↓' : this.pipeDir === 'left' ? '←' : this.pipeDir === 'right' ? '→' : '↑';
   }
 
   private refreshRail(): void {
@@ -1297,6 +1361,9 @@ export class EditorScene extends Phaser.Scene {
 
     if (this.tool === 'erase') {
       this.eraseAt(tileX, tileY);
+    } else if (this.tool === 'link') {
+      this.linkAt(tileX, tileY);
+      return;
     } else if (this.erasing) {
       // Clic derecho: borrar sin cambiar la herramienta activa.
       this.eraseAt(tileX, tileY);
@@ -1352,7 +1419,7 @@ export class EditorScene extends Phaser.Scene {
       case 'brick':
         return { kind: 'brick', props: {} };
       case 'pipe':
-        return { kind: 'pipe', props: { w: 2, h: 2 } };
+        return { kind: 'pipe', props: { w: 2, h: 2, dir: this.pipeDir } };
       case 'exit':
         return { kind: 'exit', props: {} };
       default:
@@ -1376,42 +1443,113 @@ export class EditorScene extends Phaser.Scene {
 
   /** Auto-enlaza la tubería recién pintada con la última boca sin destino (ida y vuelta). */
   private linkPipe(pipe: Entity): void {
-    const pp = (pipe.props ?? {}) as Record<string, unknown>;
+    this.ensurePid(pipe);
     const pipes = this.level.entities.filter((e) => e.kind === 'pipe' && e !== pipe);
+    const lone = [...pipes].reverse().find((e) => {
+      const q = (e.props ?? {}) as Record<string, unknown>;
+      return !q['target'];
+    });
+    if (lone) this.linkPair(pipe, lone);
+  }
+
+  /** Asegura pid único P#. */
+  private ensurePid(pipe: Entity): string {
+    const pp = (pipe.props ?? {}) as Record<string, unknown>;
+    if (typeof pp['pid'] === 'string' && pp['pid']) return pp['pid'];
     const used = new Set<number>();
-    for (const e of pipes) {
-      const m = /^P(\d+)$/.exec((e.props as { pid?: unknown } | undefined)?.pid as string ?? '');
+    for (const e of this.level.entities) {
+      if (e.kind !== 'pipe') continue;
+      const m = /^P(\d+)$/.exec(((e.props as { pid?: unknown } | undefined)?.pid as string) ?? '');
       if (m) used.add(Number(m[1]));
     }
     let n = 1;
     while (used.has(n)) n++;
     pp['pid'] = `P${n}`;
     pipe.props = pp as Entity['props'];
-    const lone = [...pipes].reverse().find((e) => {
-      const q = (e.props ?? {}) as Record<string, unknown>;
-      return !q['target'];
-    });
-    if (lone) {
-      const qp = (lone.props ?? {}) as Record<string, unknown>;
-      qp['target'] = pp['pid'];
-      pp['target'] = qp['pid'];
-      lone.props = qp as Entity['props'];
-      pipe.props = pp as Entity['props'];
+    return pp['pid'] as string;
+  }
+
+  /** Vincula dos bocas ida y vuelta, limpiando enlaces previos de ambas. */
+  private linkPair(a: Entity, b: Entity): void {
+    const pa = this.ensurePid(a);
+    const pb = this.ensurePid(b);
+    this.clearLinksTo(pa);
+    this.clearLinksTo(pb);
+    ((a.props ?? {}) as Record<string, unknown>)['target'] = pb;
+    ((b.props ?? {}) as Record<string, unknown>)['target'] = pa;
+  }
+
+  /** Saca el target que apunte a pid (y el propio de la boca pid si se pide). */
+  private clearLinksTo(pid: string): void {
+    for (const e of this.level.entities) {
+      if (e.kind !== 'pipe') continue;
+      const p = (e.props ?? {}) as Record<string, unknown>;
+      if (p['target'] === pid) delete p['target'];
     }
   }
 
+  /** Desvincula una boca por completo (ambos lados). */
+  private unlinkPipe(pipe: Entity): void {
+    const p = (pipe.props ?? {}) as Record<string, unknown>;
+    const mine = p['pid'];
+    delete p['target'];
+    if (typeof mine === 'string' && mine) this.clearLinksTo(mine);
+  }
+
+  /** Tubería cuya huella contiene el tile (x,y), si hay. */
+  private pipeAt(x: number, y: number): Entity | null {
+    for (const e of this.level.entities) {
+      if (e.kind !== 'pipe') continue;
+      const pr = (e.props ?? {}) as { w?: unknown; h?: unknown };
+      const w = Math.max(1, Math.floor(typeof pr.w === 'number' ? pr.w : 2));
+      const h = Math.max(1, Math.floor(typeof pr.h === 'number' ? pr.h : 2));
+      if (x >= e.x && x < e.x + w && y >= e.y && y < e.y + h) return e;
+    }
+    return null;
+  }
+
+  /** Herramienta enlazar: clic A, clic B → vinculadas; clic A, clic A → tapada. */
+  private linkAt(x: number, y: number): void {
+    const pipe = this.pipeAt(x, y);
+    if (!pipe) {
+      this.linkFirst = null;
+      return;
+    }
+    if (!this.linkFirst || this.linkFirst === pipe) {
+      if (this.linkFirst === pipe) {
+        this.unlinkPipe(pipe);
+        this.linkFirst = null;
+        this.flashStatus('Tubería tapada', true);
+      } else {
+        this.linkFirst = pipe;
+        const pid = this.ensurePid(pipe);
+        this.flashStatus(`Origen ${pid}: elegí destino`, true);
+      }
+    } else {
+      this.linkPair(this.linkFirst, pipe);
+      const a = ((this.linkFirst.props ?? {}) as Record<string, unknown>)['pid'];
+      const b = ((pipe.props ?? {}) as Record<string, unknown>)['pid'];
+      this.linkFirst = null;
+      this.flashStatus(`Vinculadas ${a}↔${b}`, true);
+    }
+    this.dirty = true;
+    this.renderLevel();
+    this.updateStatus();
+  }
+
   private eraseAt(x: number, y: number): void {
-    // Al borrar una boca, las que apuntaban a ella quedan tapadas.
-    const gone = this.level.entities.find((e) => e.x === x && e.y === y && e.kind === 'pipe');
+    // Al borrar una boca (cualquier tile de su huella), las que apuntaban
+    // a ella quedan tapadas.
+    const gone = this.pipeAt(x, y);
     const gonePid = (gone?.props as { pid?: unknown } | undefined)?.pid;
     this.level.tiles = this.level.tiles.filter((t) => !(t.x === x && t.y === y));
-    this.level.entities = this.level.entities.filter((e) => !(e.x === x && e.y === y));
-    if (typeof gonePid === 'string' && gonePid) {
-      for (const e of this.level.entities) {
-        if (e.kind !== 'pipe') continue;
-        const p = (e.props ?? {}) as Record<string, unknown>;
-        if (p['target'] === gonePid) delete p['target'];
-      }
-    }
+    this.level.entities = this.level.entities.filter((e) => {
+      if (e.x === x && e.y === y) return false;
+      // Tubería: borrar cualquier tile de la huella borra la boca entera.
+      if (gone && e === gone) return false;
+      return true;
+    });
+    if (typeof gonePid === 'string' && gonePid) this.clearLinksTo(gonePid);
+    if (this.linkFirst && !this.level.entities.includes(this.linkFirst)) this.linkFirst = null;
   }
 }

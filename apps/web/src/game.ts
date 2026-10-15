@@ -86,11 +86,12 @@ interface Shroom {
   age: number;
 }
 
-/** Tubería warp: huella sólida + boca de entrada/salida. */
+/** Tubería warp: huella sólida + boca de entrada en un lado. */
 interface Pipe {
   pid: string;
   target: string;
-  /** Boca (centro arriba) en px. */
+  dir: 'up' | 'down' | 'left' | 'right';
+  /** Boca (centro del lado de entrada) en px. */
   mouthX: number;
   mouthY: number;
   /** Rect en px para overlap. */
@@ -331,7 +332,9 @@ export class GameScene extends Phaser.Scene {
           const h = Math.max(1, Math.floor((props['h'] as number | undefined) ?? 2));
           const pid = (props['pid'] as string | undefined) ?? '';
           const target = (props['target'] as string | undefined) ?? '';
-          this.addPipe(e.x, e.y, w, h, pid, target);
+          const rawDir = (props['dir'] as string | undefined) ?? 'up';
+          const dir = rawDir === 'down' || rawDir === 'left' || rawDir === 'right' ? rawDir : 'up';
+          this.addPipe(e.x, e.y, w, h, pid, target, dir);
           break;
         }
         case 'walker': {
@@ -492,7 +495,6 @@ export class GameScene extends Phaser.Scene {
       this.showMsg('+1 🪙');
     });
     // La salida abre siempre (las monedas son puntaje).
-    this.openExit();
     this.physics.add.overlap(this.player, spikes, () => this.damage());
     this.physics.add.overlap(this.player, hazards, (_p, obj) => {
       const go = obj as Phaser.GameObjects.GameObject;
@@ -518,6 +520,9 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setScrollFactor(0);
     this.refreshHud();
+
+    // La salida abre siempre (las monedas son puntaje). Después del HUD.
+    this.openExit();
 
     // --- Input ---
     this.cursors = this.input.keyboard!.createCursorKeys();
@@ -555,12 +560,21 @@ export class GameScene extends Phaser.Scene {
       this.bgLayers.push({ ts, factor: l.factor });
     }
   }
-  /** Tubería w×h (origen = tile superior-izquierdo): huella sólida + boca warp. */
-  private addPipe(tx: number, ty: number, w: number, h: number, pid: string, target: string): void {
+  /** Tubería w×h (origen = tile superior-izquierdo): huella sólida + boca warp.
+   * La boca (rim) se dibuja del lado `dir`. */
+  private addPipe(
+    tx: number, ty: number, w: number, h: number,
+    pid: string, target: string, dir: 'up' | 'down' | 'left' | 'right',
+  ): void {
+    const rimAt = (dx: number, dy: number): boolean =>
+      dir === 'up' ? dy === 0
+      : dir === 'down' ? dy === h - 1
+      : dir === 'left' ? dx === 0
+      : dx === w - 1;
     for (let dx = 0; dx < w; dx++) {
       for (let dy = 0; dy < h; dy++) {
         this.solidSet.add(`${tx + dx},${ty + dy}`);
-        const tex = dy === 0 ? PIPE.rim.key : PIPE.body.key;
+        const tex = rimAt(dx, dy) ? PIPE.rim.key : PIPE.body.key;
         this.add.image((tx + dx) * T + T / 2, (ty + dy) * T + T / 2, tex).setDepth(-4);
       }
     }
@@ -576,15 +590,19 @@ export class GameScene extends Phaser.Scene {
     const left = tx * T;
     const right = (tx + w) * T;
     const top = ty * T;
+    const bottom = (ty + h) * T;
+    const mcx = (left + right) / 2;
+    const mcy = (top + bottom) / 2;
     this.pipes.push({
       pid,
       target,
-      mouthX: cx,
-      mouthY: top,
+      dir,
+      mouthX: dir === 'left' ? left : dir === 'right' ? right : mcx,
+      mouthY: dir === 'up' ? top : dir === 'down' ? bottom : mcy,
       left,
       right,
       top,
-      bottom: (ty + h) * T,
+      bottom,
     });
   }
 
@@ -927,34 +945,51 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Entrar a una tubería con ↓ (si tiene destino). */
-  private tryPipe(): void {
+  /** Entrar a una tubería por su boca (tecla hacia la boca). */
+  private tryPipe(keyUp: boolean, keyDown: boolean, keyLeft: boolean, keyRight: boolean): void {
     if (this.pipeCd > 0 || this.won) return;
     const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const headY = body.top;
+    const midY = (body.top + body.bottom) / 2;
     for (const p of this.pipes) {
-      if (
-        this.player.x > p.left - 4 &&
-        this.player.x < p.right + 4 &&
-        body.bottom > p.top - 8 &&
-        body.bottom < p.top + 24
-      ) {
-        if (!p.target) {
-          this.showMsg('Tubería tapada');
-          return;
-        }
-        const dest = this.pipes.find((q) => q.pid === p.target);
-        if (!dest) {
-          this.showMsg('Tubería tapada');
-          return;
-        }
-        this.setCrouch(false);
-        const half = ((this.big ? FEEL.bigH : FEEL.smallH) / 2) + 2;
-        this.player.setPosition(dest.mouthX, dest.mouthY - half);
-        this.player.setVelocity(0, 0);
-        this.pipeCd = 1.0;
-        this.showMsg('¡Warp!');
+      const want =
+        p.dir === 'up' ? keyDown && this.player.x > p.left - 4 && this.player.x < p.right + 4 &&
+          body.bottom > p.top - 8 && body.bottom < p.top + 24
+        : p.dir === 'down' ? keyUp && this.player.x > p.left - 4 && this.player.x < p.right + 4 &&
+          headY > p.bottom - 24 && headY < p.bottom + 8
+        : p.dir === 'left' ? keyRight && midY > p.top - 4 && midY < p.bottom + 4 &&
+          body.right > p.left - 8 && body.right < p.left + 24
+        : keyLeft && midY > p.top - 4 && midY < p.bottom + 4 &&
+          body.left > p.right - 24 && body.left < p.right + 8;
+      if (!want) continue;
+      if (!p.target) {
+        this.showMsg('Tubería tapada');
         return;
       }
+      const dest = this.pipes.find((q) => q.pid === p.target);
+      if (!dest) {
+        this.showMsg('Tubería tapada');
+        return;
+      }
+      this.setCrouch(false);
+      const halfH = (this.big ? FEEL.bigH : FEEL.smallH) / 2 + 2;
+      const halfW = (this.big ? FEEL.bigW : FEEL.smallW) / 2 + 2;
+      if (dest.dir === 'up') {
+        this.player.setPosition(dest.mouthX, dest.top - halfH);
+        this.player.setVelocity(0, 0);
+      } else if (dest.dir === 'down') {
+        this.player.setPosition(dest.mouthX, dest.bottom + halfH);
+        this.player.setVelocity(0, 60);
+      } else if (dest.dir === 'left') {
+        this.player.setPosition(dest.left - halfW, dest.mouthY);
+        this.player.setVelocity(-60, 0);
+      } else {
+        this.player.setPosition(dest.right + halfW, dest.mouthY);
+        this.player.setVelocity(60, 0);
+      }
+      this.pipeCd = 1.0;
+      this.showMsg('¡Warp!');
+      return;
     }
   }
 
@@ -1021,8 +1056,13 @@ export class GameScene extends Phaser.Scene {
     // Agacharse (↓): solo en piso; pararse exige techo libre si es grande.
     if (down && onFloor) this.setCrouch(true);
     else this.setCrouch(false);
-    // Tubería: ↓ sobre la boca.
-    if (down) this.tryPipe();
+    // Tubería: tecla hacia la boca.
+    this.tryPipe(
+      this.cursors.up.isDown || touchState.jump,
+      down,
+      left,
+      right,
+    );
     this.pipeCd = Math.max(0, this.pipeCd - delta);
 
     // --- Locomoción SMB: aceleración / fricción / derrape ---
