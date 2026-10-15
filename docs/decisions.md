@@ -41,6 +41,9 @@
   pares; borrar rompe el enlace; `target` a pid inexistente = error.
 - Inspector (mano + clic): eje/rango/velocidad de plataformas, rango/velocidad
   de enemigos, w/h de pinchos y tuberías, dir de boca, skins y colores.
+- Miniaturas exactas del frame 0 (canvas, sin CSS de strips).
+- Auto-borde de piso (toggle, ON por default): matriz 3×3 / tapas / par según
+  grupo; manual al apagarlo.
 - Entrada: izquierdo pinta (clic o trazo corrido), derecho borra (clic o
   trazo), rueda mueve el canvas (Shift horizontal, Ctrl zoom), mano/espacio/
   botón central panean. Grilla de 1px en pantalla a todo zoom. Errores con

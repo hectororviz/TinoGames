@@ -23,7 +23,7 @@ import {
   type SheetDef,
 } from './catalog.js';
 import { blankLevel, cloneLevel } from './levels.js';
-import { PISO_GROUPS } from './piso-groups.js';
+import { PISO_GROUPS, type PisoGroup } from './piso-groups.js';
 import type { EditorData } from './levels.js';
 import { getToken, publishLevel, updateRemoteLevel, deleteRemoteLevel } from './api.js';
 
@@ -77,6 +77,8 @@ export class EditorScene extends Phaser.Scene {
   private powerSkin = 'box1';
   private pipeDir = 'up';
   private linkFirst: Entity | null = null;
+  /** Auto-borde de piso: elige la variante según vecinos (toggle en topbar). */
+  private autoEdge = true;
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private guideGraphics!: Phaser.GameObjects.Graphics;
   private boundsGraphics!: Phaser.GameObjects.Graphics;
@@ -189,6 +191,7 @@ export class EditorScene extends Phaser.Scene {
     this.boundsGraphics = this.add.graphics().setDepth(80);
     this.ghost = this.add.image(0, 0, 'tile', 0).setAlpha(0.5).setDepth(100).setVisible(false);
     this.ghostRect = this.add.graphics().setDepth(100).setVisible(false);
+    this.buildThumbs();
     this.centerCamera();
     this.renderBackground();
     this.renderLevel();
@@ -852,6 +855,10 @@ export class EditorScene extends Phaser.Scene {
     el('ed-export').onclick = () => this.exportLevel();
     el('ed-import').onclick = () => this.importLevel();
     el('ed-test').onclick = () => this.testLevel();
+    el('ed-auto').onclick = () => {
+      this.autoEdge = !this.autoEdge;
+      el('ed-auto').textContent = this.autoEdge ? 'Auto-borde: ON' : 'Auto-borde: OFF';
+    };
     el('ed-exit').onclick = () => {
       if (!this.confirmDiscard()) return;
       this.scene.start('menu');
@@ -900,6 +907,68 @@ export class EditorScene extends Phaser.Scene {
 
   private openCat: RailCat | null = null;
   private recents: { label: string; style: Record<string, string>; apply: () => void }[] = [];
+  /** Miniaturas exactas (frame 0) generadas de las texturas cargadas. */
+  private thumbCache = new Map<string, string>();
+
+  /** Genera thumbs 1:1 del frame 0 (sin matemática de strips CSS). */
+  private buildThumbs(): void {
+    this.thumbCache = new Map();
+    const put = (key: string, fw: number, fh: number): void => {
+      if (!this.textures.exists(key)) return;
+      try {
+        const src = this.textures.get(key).getSourceImage() as CanvasImageSource;
+        const S = 44;
+        const k = Math.min(S / fw, S / fh);
+        const cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(fw * k));
+        cv.height = Math.max(1, Math.round(fh * k));
+        const ctx = cv.getContext('2d');
+        if (!ctx) return;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(src, 0, 0, fw, fh, 0, 0, cv.width, cv.height);
+        this.thumbCache.set(key, cv.toDataURL());
+      } catch {
+        // sin thumb: usa fallback CSS
+      }
+    };
+    const putSheet = (s: SheetDef): void => put(s.key, s.fw, s.fh);
+    for (const c of CHAR_SKINS) putSheet(c.idle);
+    for (const s of FRUIT_SHEETS) putSheet(s);
+    for (const e of ENEMIES) putSheet(e.tex);
+    for (const o of OBSTACLES) {
+      if (o.tex) putSheet(o.tex);
+    }
+    putSheet(CHECKPOINT.on);
+    putSheet(PLATFORMS.mover);
+    putSheet(PLATFORMS.faller);
+    // Imágenes simples: frame completo.
+    const putImg = (key: string): void => {
+      if (!this.textures.exists(key)) return;
+      const fr = this.textures.get(key).get();
+      put(key, fr.width, fr.height);
+    };
+    putImg('spike');
+    for (const o of OBSTACLES) if (o.image) putImg(o.image.key);
+    putImg(TRAMP_IDLE.key);
+    for (const g of COINS) putImg(g.key);
+    putImg(CHECKPOINT.off.key);
+    putImg(EXIT_DOOR.idle.key);
+    for (const d of DECOS) putImg(d.key);
+    putImg(PIPE.rim.key);
+  }
+
+  /** Estilo de miniatura: canvas exacto si está, CSS legacy si no. */
+  private thumbFor(key: string, url: string, fw: number, fh: number, frames: number): Record<string, string> {
+    const hit = this.thumbCache.get(key);
+    if (hit) {
+      return {
+        backgroundImage: `url("${hit}")`,
+        backgroundSize: 'contain',
+        backgroundPosition: 'center',
+      };
+    }
+    return this.sheetThumb(url, fw, fh, frames);
+  }
 
   /** Miniatura 44px de un frame de spritesheet (frame 0). */
   private sheetThumb(url: string, fw: number, fh: number, frames: number, h = 40): Record<string, string> {
@@ -1035,7 +1104,7 @@ export class EditorScene extends Phaser.Scene {
   private buildPersonajeFlyout(fly: HTMLElement): void {
     const grid = this.fgrid(fly);
     for (const c of CHAR_SKINS) {
-      this.fopt(grid, c.label, this.sheetThumb(c.idle.url, 32, 32, c.idle.frames), () => {
+      this.fopt(grid, c.label, this.thumbFor(c.idle.key, c.idle.url, 32, 32, c.idle.frames), () => {
         this.playerSkin = c.id;
         this.tool = 'player_start';
       });
@@ -1045,14 +1114,14 @@ export class EditorScene extends Phaser.Scene {
   private buildEnemigosFlyout(fly: HTMLElement): void {
     const walk = this.fsect(fly, 'Caminantes', true);
     for (const e of ENEMIES.filter((x) => x.kind === 'walker')) {
-      this.fopt(walk, e.label, this.sheetThumb(e.tex.url, e.tex.fw, e.tex.fh, e.tex.frames), () => {
+      this.fopt(walk, e.label, this.thumbFor(e.tex.key, e.tex.url, e.tex.fw, e.tex.fh, e.tex.frames), () => {
         this.enemySkin = e.id;
         this.tool = 'enemy';
       });
     }
     const air = this.fsect(fly, 'Voladores', true);
     for (const e of ENEMIES.filter((x) => x.kind === 'flyer')) {
-      this.fopt(air, e.label, this.sheetThumb(e.tex.url, e.tex.fw, e.tex.fh, e.tex.frames), () => {
+      this.fopt(air, e.label, this.thumbFor(e.tex.key, e.tex.url, e.tex.fw, e.tex.fh, e.tex.frames), () => {
         this.enemySkin = e.id;
         this.tool = 'enemy';
       });
@@ -1063,7 +1132,7 @@ export class EditorScene extends Phaser.Scene {
     const grid = this.fgrid(fly);
     for (const f of FRUITS) {
       const sheet = FRUIT_SHEETS.find((s) => s.key === f.key)!;
-      this.fopt(grid, f.label, this.sheetThumb(sheet.url, 32, 32, sheet.frames), () => {
+      this.fopt(grid, f.label, this.thumbFor(sheet.key, sheet.url, 32, 32, sheet.frames), () => {
         this.fruitSkin = f.id;
         this.tool = 'fruit';
       });
@@ -1073,7 +1142,7 @@ export class EditorScene extends Phaser.Scene {
   private buildGemasFlyout(fly: HTMLElement): void {
     const grid = this.fgrid(fly);
     for (const g of COINS) {
-      this.fopt(grid, `Moneda ${g.label}`, this.sheetThumb(g.url, 32, 32, 1), () => {
+      this.fopt(grid, `Moneda ${g.label}`, this.thumbFor(g.key, g.url, 32, 32, 1), () => {
         this.gemColor = g.id;
         this.tool = 'gem';
       });
@@ -1082,18 +1151,11 @@ export class EditorScene extends Phaser.Scene {
 
   private buildObstaculosFlyout(fly: HTMLElement): void {
     const grid = this.fgrid(fly);
-    const byId = Object.fromEntries(OBSTACLES.map((o) => [o.id, o]));
-    const dims: Record<string, [string, number, number, number]> = {
-      spikes: [byId['spikes'].image!.url, 16, 16, 1],
-      saw: [byId['saw'].tex!.url, 38, 38, 8],
-      fire: [byId['fire'].tex!.url, 16, 32, 3],
-      rock: [byId['rock'].image!.url, 42, 42, 1],
-      spikehead: [byId['spikehead'].image!.url, 54, 52, 1],
-      trampoline: [TRAMP_IDLE.url, 28, 28, 1],
-    };
     for (const o of OBSTACLES) {
-      const [url, fw, fh, frames] = dims[o.id]!;
-      this.fopt(grid, o.label, this.sheetThumb(url, fw, fh, frames), () => {
+      const style = o.tex
+        ? this.thumbFor(o.tex.key, o.tex.url, o.tex.fw, o.tex.fh, o.tex.frames)
+        : this.thumbFor(o.image!.key, o.image!.url, o.bw, o.bh, 1);
+      this.fopt(grid, o.label, style, () => {
         this.obstacle = o.id;
         this.tool = 'spikes';
       });
@@ -1131,28 +1193,28 @@ export class EditorScene extends Phaser.Scene {
 
   private buildOtrosFlyout(fly: HTMLElement): void {
     const grid = this.fgrid(fly);
-    this.fopt(grid, 'Checkpoint', this.sheetThumb(CHECKPOINT.off.url, 64, 64, 1), () => {
+    this.fopt(grid, 'Checkpoint', this.thumbFor(CHECKPOINT.off.key, CHECKPOINT.off.url, 64, 64, 1), () => {
       this.tool = 'checkpoint';
     });
-    this.fopt(grid, 'Plataforma → (horizontal)', this.sheetThumb(PLATFORMS.mover.url, 32, 8, 8), () => {
+    this.fopt(grid, 'Plataforma → (horizontal)', this.thumbFor(PLATFORMS.mover.key, PLATFORMS.mover.url, 32, 8, 8), () => {
       this.platformAxis = 'x';
       this.tool = 'platform';
     });
-    this.fopt(grid, 'Plataforma ↕ (vertical)', this.sheetThumb(PLATFORMS.mover.url, 32, 8, 8), () => {
+    this.fopt(grid, 'Plataforma ↕ (vertical)', this.thumbFor(PLATFORMS.mover.key, PLATFORMS.mover.url, 32, 8, 8), () => {
       this.platformAxis = 'y';
       this.tool = 'platform';
     });
-    this.fopt(grid, 'Plataforma que cae', this.sheetThumb(PLATFORMS.faller.url, 32, 10, 4), () => {
+    this.fopt(grid, 'Plataforma que cae', this.thumbFor(PLATFORMS.faller.key, PLATFORMS.faller.url, 32, 10, 4), () => {
       this.platformAxis = 'fall';
       this.tool = 'platform';
     });
     for (const d of POWERUPS) {
-      this.fopt(grid, d.label, this.sheetThumb(d.url, d.w, d.h, 1), () => {
+      this.fopt(grid, d.label, this.thumbFor(d.key, d.url, d.w, d.h, 1), () => {
         this.powerSkin = d.id;
         this.tool = 'powerup';
       });
     }
-    this.fopt(grid, 'Ladrillo', this.sheetThumb(BRICK.url, BRICK.w, BRICK.h, 1), () => {
+    this.fopt(grid, 'Ladrillo', this.thumbFor(BRICK.key, BRICK.url, BRICK.w, BRICK.h, 1), () => {
       this.tool = 'brick';
     });
     const pipeDirs = [
@@ -1162,12 +1224,12 @@ export class EditorScene extends Phaser.Scene {
       ['right', 'Tubería →'],
     ] as const;
     for (const [dir, label] of pipeDirs) {
-      this.fopt(grid, label, this.sheetThumb(PIPE.rim.url, 16, 16, 1), () => {
+      this.fopt(grid, label, this.thumbFor(PIPE.rim.key, PIPE.rim.url, 16, 16, 1), () => {
         this.pipeDir = dir;
         this.tool = 'pipe';
       });
     }
-    this.fopt(grid, 'Salida', this.sheetThumb(EXIT_DOOR.idle.url, 64, 64, 1), () => {
+    this.fopt(grid, 'Salida', this.thumbFor(EXIT_DOOR.idle.key, EXIT_DOOR.idle.url, 64, 64, 1), () => {
       this.tool = 'exit';
     });
   }
@@ -1190,48 +1252,48 @@ export class EditorScene extends Phaser.Scene {
     if (this.tool === 'erase') return { label: 'Borrar', style: {} };
     if (this.tool === 'hand') return { label: 'Mano', style: {} };
     if (!sel) return { label: '—', style: {} };
-    const p = this.preview(sel.kind, sel.props);
-    let url = '';
-    let fw = 16;
-    let fh = p.fh;
-    let frames = 1;
     if (sel.kind === 'player_start') {
       const c = CHAR_SKINS.find((x) => x.id === sel.props['skin']) ?? CHAR_SKINS[0];
-      url = c.idle.url; fw = 32; frames = c.idle.frames;
+      return this.thumbKeyed(c.idle.key, c.idle.url, 32, c.idle.frames);
     } else if (sel.kind === 'walker' || sel.kind === 'flyer') {
       const s = ENEMIES.find((x) => x.id === sel.props['skin']) ?? ENEMIES[0];
-      url = s.tex.url; fw = s.tex.fw; frames = s.tex.frames;
+      return this.thumbKeyed(s.tex.key, s.tex.url, s.tex.fw, s.tex.frames);
     } else if (sel.kind === 'fruit') {
       const sheet = FRUIT_SHEETS.find((s) => s.key === (FRUITS.find((f) => f.id === sel.props['skin']) ?? FRUITS[0]).key)!;
-      url = sheet.url; fw = 32; frames = sheet.frames;
+      return this.thumbKeyed(sheet.key, sheet.url, 32, sheet.frames);
     } else if (sel.kind === 'gem') {
-      url = (COINS.find((g) => g.id === sel.props['color']) ?? COINS[0]).url; fw = 32; frames = 1;
+      const gm = COINS.find((g) => g.id === sel.props['color']) ?? COINS[0];
+      return this.thumbKeyed(gm.key, gm.url, 32, 1);
     } else if (sel.kind === 'item') {
-      url = FRUIT_SHEETS[0].url; fw = 32; frames = 17;
+      return this.thumbKeyed(FRUIT_SHEETS[0].key, FRUIT_SHEETS[0].url, 32, 17);
     } else if (sel.kind === 'checkpoint') {
-      url = CHECKPOINT.off.url; fw = 64; frames = 1;
+      return this.thumbKeyed(CHECKPOINT.off.key, CHECKPOINT.off.url, 64, 1);
     } else if (sel.kind === 'platform') {
       const plat = sel.props['axis'] === 'fall' ? PLATFORMS.faller : PLATFORMS.mover;
-      url = plat.url; fw = plat.fw; frames = plat.frames;
+      return this.thumbKeyed(plat.key, plat.url, plat.fw, plat.frames);
     } else if (sel.kind === 'spikes') {
       const o = OBSTACLES.find((x) => x.id === (sel.props['variant'] ?? 'spikes')) ?? OBSTACLES[0];
-      if (o.tex) { url = o.tex.url; fw = o.tex.fw; frames = o.tex.frames; }
-      else { url = o.image!.url; fw = p.fh; frames = 1; }
+      if (o.tex) return this.thumbKeyed(o.tex.key, o.tex.url, o.tex.fw, o.tex.frames);
+      return this.thumbKeyed(o.image!.key, o.image!.url, o.bw, 1);
     } else if (sel.kind === 'powerup') {
       const d = POWERUPS.find((x) => x.id === sel.props['skin']) ?? POWERUPS[0];
-      url = d.url; fw = d.w; frames = 1;
+      return this.thumbKeyed(d.key, d.url, d.w, 1);
     } else if (sel.kind === 'brick') {
-      url = BRICK.url; fw = BRICK.w; frames = 1;
+      return this.thumbKeyed(BRICK.key, BRICK.url, BRICK.w, 1);
     } else if (sel.kind === 'pipe') {
-      url = PIPE.rim.url; fw = 16; frames = 1;
+      return this.thumbKeyed(PIPE.rim.key, PIPE.rim.url, 16, 1);
     } else if (sel.kind === 'deco') {
       const d = DECOS.find((x) => x.id === sel.props['skin']) ?? DECOS[0];
-      url = d.url; fw = d.w; frames = 1;
+      return this.thumbKeyed(d.key, d.url, d.w, 1);
     } else if (sel.kind === 'exit') {
-      url = EXIT_DOOR.idle.url; fw = 64; frames = 1;
+      return this.thumbKeyed(EXIT_DOOR.idle.key, EXIT_DOOR.idle.url, 64, 1);
     }
-    void fh;
-    return { label: this.toolLabel(), style: this.sheetThumb(url, fw, p.fh, frames, 40) };
+    return { label: this.toolLabel(), style: {} };
+  }
+
+  private thumbKeyed(key: string, url: string, fw: number, frames: number): { label: string; style: Record<string, string> } {
+    // El cache (frame 0 exacto) ignora estas medidas; solo importan en fallback.
+    return { label: this.toolLabel(), style: this.thumbFor(key, url, fw, 32, frames) };
   }
 
   private toolLabel(): string {
@@ -1688,6 +1750,57 @@ export class EditorScene extends Phaser.Scene {
     } else {
       this.level.tiles.push({ x, y, t: 'ground', v: this.tileVariant });
     }
+    if (this.autoEdge) this.fixEdges(x, y);
+  }
+
+  private groundAt(x: number, y: number): boolean {
+    return this.level.tiles.some((t) => t.t === 'ground' && t.x === x && t.y === y);
+  }
+
+  /** Variante del grupo según vecinos (matriz 1-9 del cubo). */
+  private autoVariant(x: number, y: number, g: PisoGroup): number {
+    const vs = g.variants;
+    if (g.auto === 'row') {
+      const left = this.groundAt(x - 1, y);
+      const right = this.groundAt(x + 1, y);
+      if (!left) return vs[0];
+      if (!right) return vs[vs.length - 1];
+      return vs[Math.min(1, vs.length - 1)];
+    }
+    if (g.auto === 'pair') {
+      return vs[Math.abs(x) % vs.length];
+    }
+    // cube 3x3: esquinas primero, después bordes, centro al final.
+    const n = this.groundAt(x, y - 1);
+    const s = this.groundAt(x, y + 1);
+    const w = this.groundAt(x - 1, y);
+    const e = this.groundAt(x + 1, y);
+    const at = (i: number): number => vs[Math.min(i, vs.length - 1)];
+    if (!n && !w) return at(0);
+    if (!n && !e) return at(2);
+    if (!s && !w) return at(6);
+    if (!s && !e) return at(8);
+    if (!n) return at(1);
+    if (!s) return at(7);
+    if (!w) return at(3);
+    if (!e) return at(5);
+    return at(4);
+  }
+
+  /** Recalcula el tile + vecinos del mismo grupo tras pintar/borrar. */
+  private fixEdges(x: number, y: number): void {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const t = this.level.tiles.find(
+          (tt) => tt.t === 'ground' && tt.x === x + dx && tt.y === y + dy,
+        );
+        if (!t) continue;
+        const g = PISO_GROUPS.find((gr) => gr.variants.includes(t.v ?? 0));
+        if (!g || g.auto === 'off') continue;
+        t.v = this.autoVariant(t.x, t.y, g);
+        if (t.v === 0) delete t.v;
+      }
+    }
   }
 
   private currentSelection(): { kind: Entity['kind']; props: Record<string, unknown> } | null {
@@ -1871,5 +1984,6 @@ export class EditorScene extends Phaser.Scene {
     });
     if (typeof gonePid === 'string' && gonePid) this.clearLinksTo(gonePid);
     if (this.linkFirst && !this.level.entities.includes(this.linkFirst)) this.linkFirst = null;
+    if (this.autoEdge) this.fixEdges(x, y);
   }
 }
