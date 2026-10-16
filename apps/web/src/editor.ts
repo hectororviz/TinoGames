@@ -450,6 +450,36 @@ export class EditorScene extends Phaser.Scene {
     this.updateStatus();
   }
 
+  /** Nombre legible para el inspector (el kind técnico confunde). */
+  private friendlyKind(e: Entity): string {
+    const p = (e.props ?? {}) as Record<string, unknown>;
+    switch (e.kind) {
+      case 'player_start': return 'Personaje';
+      case 'walker':
+      case 'flyer':
+        return (ENEMIES.find((x) => x.id === p['skin']) ?? ENEMIES[0]).label;
+      case 'fruit': return 'Hongo (nivel viejo: sale solo de cajas)';
+      case 'item': return 'Item (nivel viejo)';
+      case 'gem': return `Moneda ${(COINS.find((g) => g.id === p['color']) ?? COINS[0]).label}`;
+      case 'platform':
+        return p['axis'] === 'fall' ? 'Plataforma que cae' : 'Plataforma móvil';
+      case 'spikes': {
+        const v = typeof p['variant'] === 'string' ? p['variant'] : 'spikes';
+        return (OBSTACLES.find((o) => o.id === v) ?? OBSTACLES[0]).label;
+      }
+      case 'powerup': {
+        const has = (POWERUP_CONTENTS.find((c) => c.id === p['contains']) ?? POWERUP_CONTENTS[0]).label;
+        return `Caja ? (${has})`;
+      }
+      case 'brick': return 'Ladrillo';
+      case 'pipe': return 'Tubería';
+      case 'checkpoint': return 'Checkpoint';
+      case 'deco': return 'Decoración';
+      case 'exit': return 'Salida';
+      default: return e.kind;
+    }
+  }
+
   /** Inspector de propiedades de la entidad seleccionada. */
   private renderProps(): void {
     const panel = document.getElementById('ed-props');
@@ -464,8 +494,12 @@ export class EditorScene extends Phaser.Scene {
     panel.hidden = false;
     panel.textContent = '';
     const title = document.createElement('h3');
-    title.textContent = `${e.kind} (${e.x},${e.y})`;
+    title.textContent = `${this.friendlyKind(e)} (${e.x},${e.y})`;
     panel.appendChild(title);
+    const sub = document.createElement('div');
+    sub.style.cssText = 'font-size:11px;color:#aaaacc;margin:-4px 0 8px;';
+    sub.textContent = 'Propiedades del sprite seleccionado';
+    panel.appendChild(sub);
     const p = this.propsOf(e);
     const num = (k: string, dflt: number, min: number, max: number, step = 1): void => {
       this.numField(panel, k, typeof p[k] === 'number' ? (p[k] as number) : dflt, min, max, step, (v) => {

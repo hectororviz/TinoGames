@@ -4,6 +4,8 @@ import { GameScene } from './game.js';
 import { MenuScene } from './menu.js';
 import { EditorScene } from './editor.js';
 
+const debugHitbox = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
+
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'app',
@@ -13,7 +15,7 @@ const game = new Phaser.Game({
   pixelArt: true,
   physics: {
     default: 'arcade',
-    arcade: { gravity: { x: 0, y: FEEL.gravityUp }, debug: false },
+    arcade: { gravity: { x: 0, y: FEEL.gravityUp }, debug: debugHitbox },
   },
   scale: {
     mode: Phaser.Scale.FIT,

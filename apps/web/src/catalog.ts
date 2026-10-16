@@ -226,10 +226,10 @@ export interface ObstacleDef {
 }
 
 export const OBSTACLES: ObstacleDef[] = [
-  { id: 'spikes', label: 'Pinchos', image: { key: 'spike', url: vendorSpikeUrl }, bw: 16, bh: 10 },
+  { id: 'spikes', label: 'Pinchos', image: { key: 'spike', url: vendorSpikeUrl }, bw: 10, bh: 6 },
   { id: 'saw', label: 'Sierra', tex: sheet('saw', sawUrl, 38, 38, 8), bw: 30, bh: 30 },
   { id: 'fire', label: 'Fuego', tex: sheet('fire', fireUrl, 16, 32, 3), bw: 12, bh: 28 },
-  { id: 'rock', label: 'Roca (cae)', image: { key: 'rock', url: rockUrl }, bw: 34, bh: 34 },
+  { id: 'rock', label: 'Roca (cae)', image: { key: 'rock', url: rockUrl }, bw: 26, bh: 26 },
   { id: 'spikehead', label: 'Cabeza pinchos', image: { key: 'spikehead', url: spikeheadUrl }, bw: 44, bh: 40 },
   { id: 'trampoline', label: 'Trampolín', tex: sheet('tramp-jump', trampJumpUrl, 28, 28, 8), bw: 24, bh: 12 },
 ];

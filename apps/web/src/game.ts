@@ -596,17 +596,26 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.collider(w.spr, this.pipeSolids);
     }
     // Items como sensor (overlap): agarrarlos no altera la velocidad del salto.
+    // Se guarda/restaura vy explícito: body.reset de grow() no debe cortar el vuelo.
     this.physics.add.overlap(this.player, items, (_p, obj) => {
       const go = obj as Phaser.GameObjects.GameObject;
+      const pb = this.player.body as Phaser.Physics.Arcade.Body;
+      const vx = pb.velocity.x;
+      const vy = pb.velocity.y;
+      const armed = this.jumpCutArmed;
+      const buf = this.buffer;
       const isFruit = go.getData?.('fruit') === true;
       go.destroy();
       if (isFruit) {
         this.grow();
-        return;
+      } else {
+        // Moneda: solo puntaje.
+        this.coins++;
+        this.refreshHud();
       }
-      // Moneda: solo puntaje.
-      this.coins++;
-      this.refreshHud();
+      this.player.setVelocity(vx, vy);
+      this.jumpCutArmed = armed;
+      this.buffer = buf;
     });
     // La salida abre siempre (las monedas son puntaje).
     this.physics.add.overlap(this.player, spikes, () => this.damage());
@@ -787,10 +796,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (variant === 'spikes') {
+      // Solo la punta mata: perdón de 3px por lado estilo Mario.
       const s = spikes.create(x, y, 'spike') as Phaser.Physics.Arcade.Image;
       s.refreshBody();
-      (s.body as Phaser.Physics.Arcade.Body).setSize(T, 10);
-      (s.body as Phaser.Physics.Arcade.Body).setOffset(0, 6);
+      (s.body as Phaser.Physics.Arcade.Body).setSize(10, 6);
+      (s.body as Phaser.Physics.Arcade.Body).setOffset(3, 10);
       return;
     }
     if (variant === 'trampoline') {
@@ -1036,7 +1046,9 @@ export class GameScene extends Phaser.Scene {
     const def = OBSTACLES.find((o) => o.id === 'rock')!;
     const spr = this.physics.add.sprite(x, y, def.image!.key);
     const b = spr.body as Phaser.Physics.Arcade.Body;
-    b.setSize(def.bw, def.bh);
+    // Arte 42x42 con aire: el cuerpo real es 26x26 centrado.
+    b.setSize(26, 26);
+    b.setOffset(8, 8);
     b.setAllowGravity(false);
     b.setImmovable(true);
     const rock: DropRock = { spr, homeX: x, homeY: y, state: 'idle', timer: 0 };
@@ -1297,7 +1309,7 @@ export class GameScene extends Phaser.Scene {
     return this.riseThrough(p, o);
   }
 
-  /** Trampolín: solo rebota al aterrizar encima; de costado o desde abajo pasa. */
+  /** Trampolín: rebota al caer encima y también al pisarlo caminando; de costado o desde abajo pasa. */
   private trampProcess(p: object, o: object): boolean {
     const pb = (p as unknown as { body: Phaser.Physics.Arcade.Body }).body;
     const qb = (o as unknown as { body: Phaser.Physics.Arcade.Body }).body;
@@ -1311,8 +1323,11 @@ export class GameScene extends Phaser.Scene {
       this.trampHot = true;
       return true;
     }
-    // Quieto encima: sostener sin rebotar (el rebote lo dispara trampHot).
-    if (Math.abs(pb.velocity.y) <= 40 && pen <= 4 && pen >= -6) return true;
+    // Pisarlo caminando o quieto encima también rebotan (antes solo sostenía).
+    if (Math.abs(pb.velocity.y) <= 40 && pen <= 4 && pen >= -6) {
+      this.trampHot = true;
+      return true;
+    }
     return false;
   }
 
@@ -1529,7 +1544,7 @@ export class GameScene extends Phaser.Scene {
       } else if (r.state === 'falling') {
         if (rb.blocked.down) {
           r.state = 'rest';
-          r.timer = 0.8;
+          r.timer = 1.0;
           r.spr.setVelocity(0, 0);
           rb.setAllowGravity(false);
           rb.setImmovable(true);
@@ -1541,7 +1556,8 @@ export class GameScene extends Phaser.Scene {
         r.timer -= delta;
         if (r.timer <= 0) r.state = 'rising';
       } else {
-        r.spr.y -= 70 * delta;
+        // Subida lenta (~1.7 tiles/s): da ventana para pasar por debajo.
+        r.spr.y -= 28 * delta;
         if (r.spr.y <= r.homeY) {
           r.spr.setPosition(r.homeX, r.homeY);
           r.spr.setVelocity(0, 0);

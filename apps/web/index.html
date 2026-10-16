@@ -56,6 +56,7 @@
       #ed-rail button[data-edcat].open { background: #4a9eff; border-color: #4a9eff; }
       #ed-rail button[data-edtool].active { background: #4a9eff; border-color: #4a9eff; }
       #ed-rail .ed-sep { height: 1px; background: #33334d; margin: 4px 0; }
+      #ed-rail .ed-hint { font-size: 11px; color: #aaaacc; line-height: 1.35; padding: 2px 4px; }
       #ed-rail .ed-cur label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
         color: #aaaacc; display: block; margin-bottom: 2px; }
       #ed-current { width: 44px; height: 44px; border: 1px solid #55557a; border-radius: 8px;
@@ -321,6 +322,7 @@
         <button type="button" data-edtool="hand"><span class="ico">✋</span><span class="nm">Mano</span></button>
         <button type="button" data-edtool="erase"><span class="ico">⌫</span><span class="nm">Borrar</span></button>
         <button type="button" data-edtool="link"><span class="ico">🔗</span><span class="nm">Enlazar</span></button>
+        <div class="ed-hint">✋ Mano + clic en un sprite para ver y editar sus propiedades →</div>
         <div class="ed-sep"></div>
         <div class="ed-cur"><label>Actual</label><div id="ed-current"></div></div>
         <div class="ed-cur"><label>Recientes</label><div id="ed-recents"></div></div>
