@@ -173,6 +173,10 @@ export class GameScene extends Phaser.Scene {
   private coyote = 0;
   private buffer = 0;
   private invuln = 0;
+  /** Muerte estilo SMB en curso (salto, caída, fade, respawn). */
+  private dying = false;
+  private deathTimer = 0;
+  private deathFading = false;
   /** Estrella: invencible + mata al tocar. Pluma: caída lenta con salto. Burbuja: 1 golpe gratis. */
   private starTimer = 0;
   private featherTimer = 0;
@@ -185,8 +189,8 @@ export class GameScene extends Phaser.Scene {
   private solidSet: Set<string> = new Set();
   /** Tiles flotantes delgados (sin sólido arriba ni abajo): semisólidos. */
   private oneWayTiles: Set<string> = new Set();
-  /** El último aterrizaje en trampolín vino cayendo (hay que rebotar). */
-  private trampHot = false;
+  /** Velocidad de impacto del último aterrizaje en trampolín (0 = no hay que rebotar). */
+  private trampImpact = 0;
   /** Histéresis del salto: evita que parpadee entre corto/largo al borde de walkMax. */
   private lastRunJump = false;
   /** Rects sólidos en px: tiles + tuberías + bloques ?/ladrillo. */
@@ -325,6 +329,9 @@ export class GameScene extends Phaser.Scene {
     this.featherTimer = 0;
     this.shield = false;
     this.lastHudSecond = -1;
+    this.dying = false;
+    this.deathTimer = 0;
+    this.deathFading = false;
 
     // Fondo por bioma del nivel.
     this.bgLayers = [];
@@ -345,7 +352,7 @@ export class GameScene extends Phaser.Scene {
         this.oneWayTiles.add(tileKey('tile', sx, sy));
       }
     }
-    this.trampHot = false;
+    this.trampImpact = 0;
     this.lastRunJump = false;
     let maxX = 0;
     let maxY = 0;
@@ -577,9 +584,10 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.player, moverSprites, undefined, (_p, obj) => this.riseThrough(_p, obj));
     this.physics.add.collider(this.player, fallerSprites, undefined, (_p, obj) => this.riseThrough(_p, obj));
     this.physics.add.collider(this.player, tramps, (_p, obj) => {
-      if (this.trampHot) {
-        this.trampHot = false;
-        this.bounce(obj as Phaser.GameObjects.GameObject);
+      if (this.trampImpact > 0) {
+        const impact = this.trampImpact;
+        this.trampImpact = 0;
+        this.bounce(obj as Phaser.GameObjects.GameObject, impact);
       }
     }, (_p, obj) => this.trampProcess(_p, obj));
     this.physics.add.collider(this.player, this.pipeSolids);
@@ -839,17 +847,19 @@ export class GameScene extends Phaser.Scene {
     this.loops.push({ img, tex, frames, rate, t: 0, loop: false, onDone });
   }
 
-  private bounce(go: Phaser.GameObjects.GameObject): void {
+  /** Rebote en dos niveles: base al rozarlo, alto con impulso o salto mantenido. */
+  private bounce(go: Phaser.GameObjects.GameObject, impact: number): void {
     const now = this.time.now;
     const last = (go.getData?.('cd') as number | undefined) ?? 0;
-    if (now - last < 300) return;
+    if (now - last < 120) return;
     go.setData?.('cd', now);
     const spr = go as Phaser.Physics.Arcade.Image;
     const tramp = OBSTACLES.find((o) => o.id === 'trampoline')!;
     this.playOnce(spr, tramp.tex!.key, tramp.tex!.frames, 16, () => {
       if (spr.active) spr.setTexture(TRAMP_IDLE.key);
     });
-    this.player.setVelocityY(-FEEL.trampolineVel);
+    const high = impact > 200 || this.jumpHeld();
+    this.player.setVelocityY(high ? -FEEL.trampolineHigh : -FEEL.trampolineVel);
     this.buffer = 0;
     this.jumpCutArmed = true;
   }
@@ -919,9 +929,9 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Daño estilo Mario: estrella/burbuja primero, grande→chico con invencibilidad, chico→muerte. */
+  /** Daño estilo Mario: estrella/burbuja primero, grande→chico con invencibilidad, chico→muerte SMB. */
   private damage(): void {
-    if (this.invuln > 0 || this.won) return;
+    if (this.invuln > 0 || this.won || this.dying) return;
     if (this.starTimer > 0) return;
     if (this.shield) {
       this.shield = false;
@@ -936,7 +946,47 @@ export class GameScene extends Phaser.Scene {
       this.refreshHud();
       return;
     }
-    this.respawn();
+    this.startDeath(true);
+  }
+
+  /** Muerte estilo SMB: saltito, caída fuera de pantalla, fade negro y respawn. */
+  private startDeath(withJump: boolean): void {
+    if (this.dying) return;
+    this.dying = true;
+    this.deathFading = false;
+    this.starTimer = 0;
+    this.featherTimer = 0;
+    this.shield = false;
+    this.player.clearTint();
+    this.player.setAlpha(1);
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    body.checkCollision.none = true;
+    if (withJump) {
+      this.player.setVelocity(0, -320);
+      this.deathTimer = 1.5;
+    } else {
+      // Al vacío: ya viene cayendo, solo fade rápido.
+      this.deathTimer = 0.5;
+    }
+    this.refreshHud();
+  }
+
+  /** Avance de la muerte SMB: anim salto/caída, fade negro, respawn y fade in. */
+  private updateDeath(delta: number): void {
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    const sk = this.playerSkin.id;
+    this.player.play(body.velocity.y < 0 ? `${sk}-jump` : `${sk}-fall`, true);
+    this.deathTimer -= delta;
+    if (this.deathTimer <= 0 && !this.deathFading) {
+      this.deathFading = true;
+      this.cameras.main.fadeOut(250, 0, 0, 0);
+      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+        this.respawn();
+        this.dying = false;
+        this.deathFading = false;
+        this.cameras.main.fadeIn(250, 0, 0, 0);
+      });
+    }
   }
 
   private respawn(): void {
@@ -946,6 +996,7 @@ export class GameScene extends Phaser.Scene {
     this.featherTimer = 0;
     this.shield = false;
     this.player.clearTint();
+    (this.player.body as Phaser.Physics.Arcade.Body).checkCollision.none = false;
     // Subir hasta el primer rect 12x14 libre (nunca nacer embebido).
     const startFeet = this.startY + FEEL.smallH / 2;
     let feet = startFeet;
@@ -1112,7 +1163,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Contacto con enemigo: estrella mata al tocar; pisotón rebota, si no daña. */
   private hitEnemy(spr: Phaser.Physics.Arcade.Sprite): void {
-    if (!spr.active || this.won) return;
+    if (!spr.active || this.won || this.dying) return;
     if (this.starTimer > 0) {
       this.killEnemy(spr);
       return;
@@ -1316,16 +1367,16 @@ export class GameScene extends Phaser.Scene {
     if (!pb || !qb) return false;
     const pen = pb.bottom - qb.top;
     if (pb.velocity.y < -20 && pb.top > qb.top) {
-      this.trampHot = false;
+      this.trampImpact = 0;
       return false;
     }
     if (pb.velocity.y > 40 && pen < 14) {
-      this.trampHot = true;
+      this.trampImpact = pb.velocity.y;
       return true;
     }
     // Pisarlo caminando o quieto encima también rebotan (antes solo sostenía).
     if (Math.abs(pb.velocity.y) <= 40 && pen <= 4 && pen >= -6) {
-      this.trampHot = true;
+      this.trampImpact = Math.max(1, pb.velocity.y);
       return true;
     }
     return false;
@@ -1379,6 +1430,10 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     if (this.paused) return;
+    if (this.dying) {
+      this.updateDeath(delta);
+      return;
+    }
     if (this.fromEditor && Phaser.Input.Keyboard.JustDown(this.keyE)) {
       this.scene.start('editor', { remoteId: this.remoteId, draft: this.currentLevel, name: this.levelName });
       return;
@@ -1721,11 +1776,11 @@ export class GameScene extends Phaser.Scene {
     // Red de seguridad anti-hundimiento (esquinas, crecer, respawn).
     this.ejectUp();
 
-    // Caida al vacio.
-    if (this.player.y > this.killY) this.respawn();
+    // Caida al vacio: muerte con fade (ya viene cayendo, sin saltito).
+    if (this.player.y > this.killY && !this.dying) this.startDeath(false);
 
     // Salida (siempre abierta; las monedas son puntaje).
-    if (this.exitZone && !this.won) {
+    if (this.exitZone && !this.won && !this.dying) {
       const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.exitZone.x, this.exitZone.y);
       if (d < 30) {
         this.won = true;

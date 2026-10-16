@@ -51,6 +51,8 @@ export const FEEL = {
   stompHigh: 340,
   /** Trampolín clásico. */
   trampolineVel: 460,
+  /** Trampolín con impulso (caída fuerte o salto mantenido). */
+  trampolineHigh: 600,
   /** Flote de items: seno +-3px a 3 rad/s. */
   itemFloatAmp: 3,
   itemFloatFreq: 3,
