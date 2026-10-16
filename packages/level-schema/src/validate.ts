@@ -23,8 +23,10 @@ function solidAt(solids: Set<string>, x: number, y: number): boolean {
  * - spikes y obstaculos (saw/fire/rock/spikehead/trampoline): la roca cae
  *   al acercarse (enemigo); el resto estaticos en aire (solo se rechaza si
  *   quedan dentro de solido).
- * - powerup (bloques box1/box2/box3): se cabecean desde abajo, sueltan hongo.
- *   Solo exigen no estar en solido. 'item' legacy se trata como fruta.
+ * - powerup (bloques box1/box2/box3): se cabecean desde abajo, sueltan un
+ *   item móvil según `contains` (mushroom | star | feather | bubble,
+ *   por defecto mushroom). Solo exigen no estar en solido.
+ *   'item' legacy se trata como fruta.
  * - brick (ladrillo): se cabecea desde abajo; chico rebota, grande rompe.
  *   Solo exige no estar en solido.
  * - pipe (tubería w×h, por defecto 2×2, sólida, boca del lado `dir`):
@@ -134,12 +136,21 @@ export function validateLevel(level: Level): ValidationError[] {
         break;
       case 'platform':
       case 'deco':
-      case 'powerup':
       case 'brick':
         if (solidAt(solids, e.x, e.y)) {
           fail('inside-solid', `${e.kind} at (${e.x},${e.y}) is inside solid`);
         }
         break;
+      case 'powerup': {
+        if (solidAt(solids, e.x, e.y)) {
+          fail('inside-solid', `${e.kind} at (${e.x},${e.y}) is inside solid`);
+        }
+        const contains = (e.props as { contains?: unknown } | undefined)?.contains;
+        if (contains !== undefined && contains !== 'mushroom' && contains !== 'star' && contains !== 'feather' && contains !== 'bubble') {
+          fail('powerup-contains', `bad powerup contains: ${JSON.stringify(contains)}`);
+        }
+        break;
+      }
       case 'pipe': {
         const w = Math.max(1, Math.floor((e.props as { w?: number } | undefined)?.w ?? 2));
         const h = Math.max(1, Math.floor((e.props as { h?: number } | undefined)?.h ?? 2));

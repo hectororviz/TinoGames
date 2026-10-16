@@ -90,8 +90,11 @@ export interface DecoProps {
 }
 
 export interface PowerupProps {
-  /** Bloque "?": box1 | box2 | box3. Se cabecea desde abajo y suelta un hongo móvil. */
+  /** Bloque "?": box1 | box2 | box3. Se cabecea desde abajo y suelta un item móvil.
+   * contains: 'mushroom' (agranda) | 'star' (invencible 8s) | 'feather'
+   * (caída lenta 12s) | 'bubble' (escudo de 1 golpe). Ausente = 'mushroom'. */
   skin?: string;
+  contains?: string;
 }
 
 export interface PipeProps {

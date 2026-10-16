@@ -258,6 +258,36 @@ export const POWERUPS: { id: string; label: string; key: string; url: string; w:
   { id: 'box3', label: 'Bloque ? 3', key: 'deco-box3', url: box3Url, w: 28, h: 24 },
 ];
 
+/** Contenido de la caja (placeholder con arte existente; arte final propio después). */
+export const POWERUP_CONTENTS: { id: string; label: string }[] = [
+  { id: 'mushroom', label: 'Hongo' },
+  { id: 'star', label: 'Estrella' },
+  { id: 'feather', label: 'Pluma' },
+  { id: 'bubble', label: 'Burbuja' },
+];
+
+/** Textura del item móvil según contenido (keys ya cargadas en juego+editor). */
+export function powerupLook(id: string | undefined): { key: string; url: string; fw: number; fh: number; frames: number; anim?: string } {
+  switch (id) {
+    case 'star': {
+      const g = COINS.find((x) => x.id === 'red') ?? COINS[0];
+      return { key: g.key, url: g.url, fw: 32, fh: 32, frames: 1 };
+    }
+    case 'feather': {
+      const s = FRUIT_SHEETS.find((x) => x.key === 'fruit-kiwi') ?? FRUIT_SHEETS[0];
+      return { key: s.key, url: s.url, fw: 32, fh: 32, frames: 17 };
+    }
+    case 'bubble': {
+      const g = COINS.find((x) => x.id === 'blue') ?? COINS[0];
+      return { key: g.key, url: g.url, fw: 32, fh: 32, frames: 1 };
+    }
+    default: {
+      const e = ENEMIES.find((x) => x.id === 'mushroom') ?? ENEMIES[0];
+      return { key: e.tex.key, url: e.tex.url, fw: e.tex.fw, fh: e.tex.fh, frames: e.tex.frames, anim: 'foe-mushroom' };
+    }
+  }
+}
+
 export const TILES_BASE = { key: 'tile', url: tilesPaUrl };
 export const TILES_EXTRA = { key: 'terrain', url: terrainPaUrl };
 export const CHECKPOINT = {

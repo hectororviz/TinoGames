@@ -17,9 +17,11 @@ import {
   PIPE,
   PLATFORMS,
   POWERUPS,
+  POWERUP_CONTENTS,
   TILES_BASE,
   TILES_EXTRA,
   TRAMP_IDLE,
+  powerupLook,
   type SheetDef,
 } from './catalog.js';
 import { blankLevel, cloneLevel } from './levels.js';
@@ -38,7 +40,6 @@ type Tool =
   | 'ground'
   | 'player_start'
   | 'enemy'
-  | 'fruit'
   | 'gem'
   | 'checkpoint'
   | 'platform'
@@ -51,7 +52,7 @@ type Tool =
   | 'erase'
   | 'hand';
 
-type RailCat = 'piso' | 'personaje' | 'enemigos' | 'frutas' | 'gemas' | 'obstaculos' | 'fondo' | 'otros';
+type RailCat = 'piso' | 'personaje' | 'enemigos' | 'gemas' | 'obstaculos' | 'fondo' | 'otros';
 
 function el(id: string): HTMLElement {
   const node = document.getElementById(id);
@@ -69,12 +70,12 @@ export class EditorScene extends Phaser.Scene {
   private tileVariant = 0;
   private playerSkin = 'tux';
   private enemySkin = 'pig';
-  private fruitSkin = 'bananas';
   private gemColor = 'purple';
   private platformAxis: 'x' | 'y' | 'fall' = 'x';
   private selected: Entity | null = null;
   private obstacle = 'spikes';
   private powerSkin = 'box1';
+  private powerContains = 'mushroom';
   private pipeDir = 'up';
   private linkFirst: Entity | null = null;
   /** Auto-borde de piso: elige la variante según vecinos (toggle en topbar). */
@@ -541,12 +542,30 @@ export class EditorScene extends Phaser.Scene {
           });
         break;
       case 'powerup':
-        this.selectField(panel, 'skin', typeof p['skin'] === 'string' ? (p['skin'] as string) : 'box1',
+        this.selectField(panel, 'Caja', typeof p['skin'] === 'string' ? (p['skin'] as string) : 'box1',
           POWERUPS.map((d) => ({ id: d.id, label: d.label })), (v) => {
+            this.powerSkin = v;
             this.setProp((pp) => {
               pp['skin'] = v;
             });
           });
+        this.selectField(panel, 'Contiene', typeof p['contains'] === 'string' ? (p['contains'] as string) : 'mushroom',
+          POWERUP_CONTENTS.map((c) => ({ id: c.id, label: c.label })), (v) => {
+            this.powerContains = v;
+            this.setProp((pp) => {
+              pp['contains'] = v;
+            });
+          });
+        {
+          // Vista previa del contenido elegido (placeholder con arte existente).
+          const look = powerupLook(typeof p['contains'] === 'string' ? (p['contains'] as string) : 'mushroom');
+          const prev = document.createElement('div');
+          prev.style.cssText = 'width:44px;height:44px;background-size:contain;background-repeat:no-repeat;background-position:center;margin:4px 0;';
+          const thumb = this.thumbFor(look.key, look.url, look.fw, look.fh, look.frames);
+          prev.style.backgroundImage = thumb['backgroundImage'];
+          prev.title = (POWERUP_CONTENTS.find((c) => c.id === p['contains']) ?? POWERUP_CONTENTS[0]).label;
+          panel.appendChild(prev);
+        }
         break;
       default:
         break;
@@ -1029,7 +1048,6 @@ export class EditorScene extends Phaser.Scene {
     if (cat === 'piso') this.buildPisoFlyout(fly);
     else if (cat === 'personaje') this.buildPersonajeFlyout(fly);
     else if (cat === 'enemigos') this.buildEnemigosFlyout(fly);
-    else if (cat === 'frutas') this.buildFrutasFlyout(fly);
     else if (cat === 'gemas') this.buildGemasFlyout(fly);
     else if (cat === 'obstaculos') this.buildObstaculosFlyout(fly);
     else if (cat === 'fondo') this.buildFondoFlyout(fly);
@@ -1125,17 +1143,6 @@ export class EditorScene extends Phaser.Scene {
       this.fopt(air, e.label, this.thumbFor(e.tex.key, e.tex.url, e.tex.fw, e.tex.fh, e.tex.frames), () => {
         this.enemySkin = e.id;
         this.tool = 'enemy';
-      });
-    }
-  }
-
-  private buildFrutasFlyout(fly: HTMLElement): void {
-    const grid = this.fgrid(fly);
-    for (const f of FRUITS) {
-      const sheet = FRUIT_SHEETS.find((s) => s.key === f.key)!;
-      this.fopt(grid, f.label, this.thumbFor(sheet.key, sheet.url, 32, 32, sheet.frames), () => {
-        this.fruitSkin = f.id;
-        this.tool = 'fruit';
       });
     }
   }
@@ -1259,14 +1266,9 @@ export class EditorScene extends Phaser.Scene {
     } else if (sel.kind === 'walker' || sel.kind === 'flyer') {
       const s = ENEMIES.find((x) => x.id === sel.props['skin']) ?? ENEMIES[0];
       return this.thumbKeyed(s.tex.key, s.tex.url, s.tex.fw, s.tex.frames);
-    } else if (sel.kind === 'fruit') {
-      const sheet = FRUIT_SHEETS.find((s) => s.key === (FRUITS.find((f) => f.id === sel.props['skin']) ?? FRUITS[0]).key)!;
-      return this.thumbKeyed(sheet.key, sheet.url, 32, sheet.frames);
     } else if (sel.kind === 'gem') {
       const gm = COINS.find((g) => g.id === sel.props['color']) ?? COINS[0];
       return this.thumbKeyed(gm.key, gm.url, 32, 1);
-    } else if (sel.kind === 'item') {
-      return this.thumbKeyed(FRUIT_SHEETS[0].key, FRUIT_SHEETS[0].url, 32, 17);
     } else if (sel.kind === 'checkpoint') {
       return this.thumbKeyed(CHECKPOINT.off.key, CHECKPOINT.off.url, 64, 1);
     } else if (sel.kind === 'platform') {
@@ -1302,7 +1304,6 @@ export class EditorScene extends Phaser.Scene {
       case 'ground': return `Piso ${this.tileVariant}`;
       case 'player_start': return (CHAR_SKINS.find((c) => c.id === this.playerSkin) ?? CHAR_SKINS[0]).label;
       case 'enemy': return (ENEMIES.find((e) => e.id === this.enemySkin) ?? ENEMIES[0]).label;
-      case 'fruit': return (FRUITS.find((f) => f.id === this.fruitSkin) ?? FRUITS[0]).label;
       case 'gem': return `Moneda ${(COINS.find((g) => g.id === this.gemColor) ?? COINS[0]).label}`;
       case 'checkpoint': return 'Checkpoint';
       case 'platform': {
@@ -1311,7 +1312,11 @@ export class EditorScene extends Phaser.Scene {
         return axis === 'y' ? 'Plataforma ↕' : 'Plataforma →';
       }
       case 'spikes': return (OBSTACLES.find((o) => o.id === this.obstacle) ?? OBSTACLES[0]).label;
-      case 'powerup': return (POWERUPS.find((d) => d.id === this.powerSkin) ?? POWERUPS[0]).label;
+      case 'powerup': {
+        const box = (POWERUPS.find((d) => d.id === this.powerSkin) ?? POWERUPS[0]).label;
+        const has = (POWERUP_CONTENTS.find((c) => c.id === this.powerContains) ?? POWERUP_CONTENTS[0]).label;
+        return `${box} (${has})`;
+      }
       case 'brick': return 'Ladrillo';
       case 'pipe': return `Tubería ${this.pipeDirArrow()}`;
       case 'link': return 'Enlazar';
@@ -1687,7 +1692,7 @@ export class EditorScene extends Phaser.Scene {
     this.input.keyboard?.on('keyup-SPACE', () => {
       this.spaceDown = false;
     });
-    const digits: (Tool | null)[] = ['ground', 'player_start', 'enemy', 'fruit', 'gem', 'spikes', 'checkpoint', 'platform', 'powerup'];
+    const digits: (Tool | null)[] = ['ground', 'player_start', 'enemy', 'gem', 'spikes', 'checkpoint', 'platform', 'powerup'];
     digits.forEach((tool, i) => {
       this.input.keyboard?.on(`keydown-${i + 1}`, () => {
         if (this.typing()) return;
@@ -1821,8 +1826,6 @@ export class EditorScene extends Phaser.Scene {
         }
         return { kind: skin.kind, props };
       }
-      case 'fruit':
-        return { kind: 'fruit', props: { skin: this.fruitSkin } };
       case 'gem':
         return { kind: 'gem', props: { color: this.gemColor } };
       case 'checkpoint':
@@ -1832,7 +1835,7 @@ export class EditorScene extends Phaser.Scene {
       case 'spikes':
         return { kind: 'spikes', props: this.obstacle !== 'spikes' ? { variant: this.obstacle } : {} };
       case 'powerup':
-        return { kind: 'powerup', props: { skin: this.powerSkin } };
+        return { kind: 'powerup', props: { skin: this.powerSkin, contains: this.powerContains } };
       case 'brick':
         return { kind: 'brick', props: {} };
       case 'pipe':

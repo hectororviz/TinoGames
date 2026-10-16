@@ -24,6 +24,7 @@ import {
   TILES_BASE,
   TILES_EXTRA,
   TRAMP_IDLE,
+  powerupLook,
   type CharSkin,
   type EnemySkin,
   type SheetDef,
@@ -97,11 +98,12 @@ interface DropRock {
   timer: number;
 }
 
-/** Hongo móvil que sale de los bloques "?". Camina y agranda al tocarlo. */
+/** Item móvil que sale de los bloques "?". Camina y aplica su efecto al tocarlo. */
 interface Shroom {
   spr: Phaser.Physics.Arcade.Sprite;
   dir: number;
   age: number;
+  contains: string;
 }
 
 /** Tubería warp: huella sólida + boca de entrada en un lado. */
@@ -171,6 +173,11 @@ export class GameScene extends Phaser.Scene {
   private coyote = 0;
   private buffer = 0;
   private invuln = 0;
+  /** Estrella: invencible + mata al tocar. Pluma: caída lenta con salto. Burbuja: 1 golpe gratis. */
+  private starTimer = 0;
+  private featherTimer = 0;
+  private shield = false;
+  private lastHudSecond = -1;
   private facing = 1;
   private startX = 0;
   private startY = 0;
@@ -314,6 +321,10 @@ export class GameScene extends Phaser.Scene {
     this.exitZone = null;
     this.coins = 0;
     this.won = false;
+    this.starTimer = 0;
+    this.featherTimer = 0;
+    this.shield = false;
+    this.lastHudSecond = -1;
 
     // Fondo por bioma del nivel.
     this.bgLayers = [];
@@ -499,9 +510,11 @@ export class GameScene extends Phaser.Scene {
         }
         case 'powerup': {
           const skin = POWERUPS.find((d) => d.id === (props['skin'] as string | undefined)) ?? POWERUPS[0];
+          const contains = (props['contains'] as string | undefined) ?? 'mushroom';
           const spr = blocks.create(cx, cy, skin.key) as Phaser.Physics.Arcade.Image;
           spr.refreshBody();
           spr.setData('broken', false);
+          spr.setData('contains', contains);
           this.blocks.push(spr);
           this.solidRects.push({ l: cx - 14, t: cy - 12, r: cx + 14, b: cy + 12, tag: spr });
           break;
@@ -874,7 +887,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private refreshHud(): void {
-    this.hudGems.setText(`🪙 ${this.coins}`);
+    const parts = [`🪙 ${this.coins}`];
+    if (this.starTimer > 0) parts.push(`⭐${Math.ceil(this.starTimer)}`);
+    if (this.featherTimer > 0) parts.push(`🪶${Math.ceil(this.featherTimer)}`);
+    if (this.shield) parts.push('🫧');
+    this.hudGems.setText(parts.join(' '));
+    this.lastHudSecond = Math.ceil(this.starTimer) + Math.ceil(this.featherTimer) * 100;
   }
 
   private showMsg(text: string): void {
@@ -891,9 +909,16 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Daño estilo Mario: grande→chico con invencibilidad, chico→muerte. */
+  /** Daño estilo Mario: estrella/burbuja primero, grande→chico con invencibilidad, chico→muerte. */
   private damage(): void {
     if (this.invuln > 0 || this.won) return;
+    if (this.starTimer > 0) return;
+    if (this.shield) {
+      this.shield = false;
+      this.invuln = 1.0;
+      this.refreshHud();
+      return;
+    }
     if (this.big) {
       this.setCrouch(false);
       this.applyForm(false);
@@ -907,6 +932,10 @@ export class GameScene extends Phaser.Scene {
   private respawn(): void {
     this.crouching = false;
     this.applyForm(false);
+    this.starTimer = 0;
+    this.featherTimer = 0;
+    this.shield = false;
+    this.player.clearTint();
     // Subir hasta el primer rect 12x14 libre (nunca nacer embebido).
     const startFeet = this.startY + FEEL.smallH / 2;
     let feet = startFeet;
@@ -962,18 +991,19 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Bloque "?": solo se activa con cabezazo desde abajo. Suelta un hongo móvil. */
+  /** Bloque "?": solo se activa con cabezazo desde abajo. Suelta el item de `contains`. */
   private hitBlock(block: Phaser.Physics.Arcade.Image): void {
     if (block.getData('broken') === true) return;
     const pb = this.player.body as Phaser.Physics.Arcade.Body;
     const qb = block.body as Phaser.Physics.Arcade.Body;
     const headbutt = (pb.blocked.up || pb.touching.up) && (qb.blocked.down || qb.touching.down);
     if (!headbutt) return;
+    const contains = (block.getData('contains') as string | undefined) ?? 'mushroom';
     block.setData('broken', true);
     block.disableBody(true, true);
     this.blocks = this.blocks.filter((b) => b !== block);
     this.dropSolidRect(block);
-    this.spawnShroom(block.x, block.y - T);
+    this.spawnPickup(block.x, block.y - T, contains);
   }
 
   /** Ladrillo: se cabecea desde abajo; chico rebota, grande lo rompe. */
@@ -1015,12 +1045,13 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.collider(spr, this.pipeSolids);
   }
 
-  /** Hongo móvil: sale del bloque, camina con gravedad y agranda al tocarlo. */
-  private spawnShroom(x: number, y: number): void {
-    const spr = this.physics.add.sprite(x, y, 'foe-mushroom', 0);
-    (spr.body as Phaser.Physics.Arcade.Body).setSize(22, 22);
-    spr.play('foe-mushroom');
-    const shroom: Shroom = { spr, dir: this.facing, age: 0 };
+  /** Item móvil: sale del bloque, camina con gravedad y aplica su efecto al tocarlo. */
+  private spawnPickup(x: number, y: number, contains: string): void {
+    const look = powerupLook(contains);
+    const spr = this.physics.add.sprite(x, y, look.key, 0);
+    (spr.body as Phaser.Physics.Arcade.Body).setSize(20, 20);
+    if (look.anim) spr.play(look.anim);
+    const shroom: Shroom = { spr, dir: this.facing, age: 0, contains };
     this.shrooms.push(shroom);
     if (this.solidGroup) this.physics.add.collider(spr, this.solidGroup);
     this.physics.add.collider(spr, this.pipeSolids);
@@ -1028,8 +1059,23 @@ export class GameScene extends Phaser.Scene {
       if (!spr.active) return;
       spr.disableBody(true, true);
       this.shrooms = this.shrooms.filter((s) => s !== shroom);
-      this.grow();
+      this.applyPickup(contains);
     });
+  }
+
+  /** Efecto al agarrar el item de la caja (placeholder con arte existente). */
+  private applyPickup(contains: string): void {
+    if (contains === 'star') {
+      this.starTimer = 8;
+    } else if (contains === 'feather') {
+      this.featherTimer = 12;
+    } else if (contains === 'bubble') {
+      this.shield = true;
+    } else {
+      this.grow();
+      return;
+    }
+    this.refreshHud();
   }
 
   /** Elimina un enemigo (pisotón) sin dañar al jugador. */
@@ -1052,9 +1098,13 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Contacto con enemigo: pisotón rebota (alto si mantenés salto), si no daña. */
+  /** Contacto con enemigo: estrella mata al tocar; pisotón rebota, si no daña. */
   private hitEnemy(spr: Phaser.Physics.Arcade.Sprite): void {
     if (!spr.active || this.won) return;
+    if (this.starTimer > 0) {
+      this.killEnemy(spr);
+      return;
+    }
     const pb = this.player.body as Phaser.Physics.Arcade.Body;
     const eb = spr.body as Phaser.Physics.Arcade.Body;
     const falling = pb.velocity.y > 50;
@@ -1417,6 +1467,28 @@ export class GameScene extends Phaser.Scene {
       this.player.setVelocityY(
         body.velocity.y + (FEEL.gravityDown - FEEL.gravityUp) * delta,
       );
+    }
+    // Pluma: con salto mantenido la caída planea (tope 60px/s).
+    if (this.featherTimer > 0 && !onFloor && body.velocity.y > 60 && this.jumpHeld()) {
+      this.player.setVelocityY(60);
+    }
+    // Timers de powerups + HUD por segundo.
+    if (this.starTimer > 0 || this.featherTimer > 0) {
+      this.starTimer = Math.max(0, this.starTimer - delta);
+      this.featherTimer = Math.max(0, this.featherTimer - delta);
+      const key = Math.ceil(this.starTimer) + Math.ceil(this.featherTimer) * 100;
+      if (key !== this.lastHudSecond) this.refreshHud();
+    }
+    // Reflejo en el personaje: estrella arcoíris, pluma verde, burbuja celeste.
+    if (this.starTimer > 0) {
+      const rainbow = [0xff5252, 0xffd23f, 0x7de0a8, 0x33ddff, 0xc084fc];
+      this.player.setTint(rainbow[Math.floor(this.time.now / 90) % rainbow.length]);
+    } else if (this.featherTimer > 0) {
+      this.player.setTint(0x88ff88);
+    } else if (this.shield) {
+      this.player.setTint(0x88ccff);
+    } else {
+      this.player.clearTint();
     }
 
     // Walkers: patrulla (flip solo si se aleja hacia afuera, sin oscilar).
